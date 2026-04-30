@@ -547,6 +547,10 @@ main { padding: 16px 16px calc(var(--nav-h) + var(--safe-b) + 16px); max-width: 
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
         Sync Now
       </button>
+      <button class="dp-btn dp-btn-secondary" id="dpForceResyncBtn" onclick="forceResync()" style="display:none;color:var(--yellow);border-color:rgba(245,158,11,0.3)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+        Re-parse All PDFs
+      </button>
     </div>
 
     <div class="dp-divider"></div>
@@ -1041,6 +1045,7 @@ function updateDrivePanelUI() {
   document.getElementById('dpFileDivider').style.display = hasDriveData ? 'block' : 'none';
   document.getElementById('dpFilesSection').style.display = hasDriveData ? 'block' : 'none';
   document.getElementById('dpSyncOnlyBtn').style.display = hasDriveData ? 'block' : 'none';
+  document.getElementById('dpForceResyncBtn').style.display = hasDriveData ? 'block' : 'none';
 
   // Cache info
   if (hasDriveData) {
@@ -1229,21 +1234,20 @@ function parseEvoltText(text) {
   const mineral = getP(2);
   const ecf    = getP(3);
 
-  // Locate text after TEE to narrow the search window
-  let afterTee = text;
-  if (tee) {
-    const teeRe = new RegExp(String(tee) + '\\s*[Kk][Cc][Aa][Ll]');
-    const teeM = text.match(teeRe);
-    if (teeM) afterTee = text.slice(teeM.index);
-  }
+  // afterTee = text starting immediately AFTER the last kCal value (TEE)
+  // Slicing from the end of the match excludes the TEE number itself from the search
+  const allKcalM = [...text.matchAll(/\d{3,4}\s*[Kk][Cc][Aa][Ll]/g)];
+  const lastKcalM = allKcalM[allKcalM.length - 1];
+  const afterTee = lastKcalM ? text.slice(lastKcalM.index + lastKcalM[0].length) : '';
 
-  // Bio Age: 2-digit number in range 20-60, NOT followed by a decimal digit
-  // (?!\.\d) prevents matching "34" inside "34.28"
-  const bioAgeM = afterTee.match(/\b(2[0-9]|3[0-9]|4[0-5])\b(?!\.\d)/);
+  // Bio Age: 2-digit number in range 25-55, NOT immediately followed by a decimal digit
+  // (?!\.\d) prevents "34" inside "34.28" from matching
+  const bioAgeM = afterTee.match(/\b(2[5-9]|3[0-9]|4[0-5]|5[0-5])\b(?!\.\d)/);
   const bioAge = bioAgeM ? parseInt(bioAgeM[1]) : null;
 
-  // BWI: X.X decimal where X is 4-9, word-boundary at end prevents "4.53" matching as "4.5"
-  const bwiM = afterTee.match(/\b([4-9]\.[0-9])\b/);
+  // BWI: X.X or X.XX decimal in range 3-12, NOT followed by " / " (which flags a segmental value)
+  // Allows both "6.6" and "6.60" PDF formats
+  const bwiM = afterTee.match(/\b([3-9]\.[0-9]{1,2})\b(?!\s*\/)/);
   const bwi = bwiM ? parseFloat(bwiM[1]) : null;
 
   // Segmental (indices 7+ in rangeAll): lAL,lAF,rAL,rAF, tL,tF, lLL,lLF,rLL,rLF
@@ -1259,7 +1263,7 @@ function parseEvoltText(text) {
 }
 
 // ── SYNC ORCHESTRATION ────────────────────────────────────────────────────────
-async function doSync(settings) {
+async function doSync(settings, force = false) {
   setDpStatus('spin', 'Syncing…', '<br>Connecting to Google Drive.');
   document.getElementById('dpConnectBtn').disabled = true;
 
@@ -1267,8 +1271,8 @@ async function doSync(settings) {
     const files = await listDriveFiles(settings.folderId);
     const currentIds = new Set(files.map(f => f.id));
 
-    // Start from existing cache
-    const fileMap = { ...cachedFileMap };
+    // Start from existing cache (or empty if force re-parse)
+    const fileMap = force ? {} : { ...cachedFileMap };
 
     // Remove files deleted from Drive
     Object.keys(fileMap).forEach(id => {
@@ -1330,6 +1334,11 @@ function connectAndSync() {
 
 function syncOnly() {
   getTokenThen(doSync);
+}
+
+function forceResync() {
+  if (!confirm('Re-download and re-parse all PDFs from Drive?\n\nThis clears the current cache and re-reads every file. Use this when data looks wrong after a code update.')) return;
+  getTokenThen(s => doSync(s, true));
 }
 
 async function deleteFile(fileId, fileName) {
