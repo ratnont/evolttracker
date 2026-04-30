@@ -1229,24 +1229,22 @@ function parseEvoltText(text) {
   const mineral = getP(2);
   const ecf    = getP(3);
 
-  // Bio Age and BWI: appear as standalone lines after TEE
-  const teeStr = tee ? String(tee) : null;
-  const teeIdx = teeStr ? text.indexOf(teeStr + ' ') : -1;
-  const afterTee = teeIdx >= 0 ? text.slice(teeIdx) : text;
-  const afterLines = afterTee.split('\n');
-  let bioAge = null, bwi = null;
-  for (const line of afterLines) {
-    const t = line.trim();
-    if (!bioAge && /^\d{2}$/.test(t)) {
-      const n = parseInt(t);
-      if (n >= 20 && n <= 60) bioAge = n;
-    }
-    if (!bwi && /^\d\.\d$/.test(t)) {
-      const n = parseFloat(t);
-      if (n >= 3 && n <= 12) bwi = n;
-    }
-    if (bioAge && bwi) break;
+  // Locate text after TEE to narrow the search window
+  let afterTee = text;
+  if (tee) {
+    const teeRe = new RegExp(String(tee) + '\\s*[Kk][Cc][Aa][Ll]');
+    const teeM = text.match(teeRe);
+    if (teeM) afterTee = text.slice(teeM.index);
   }
+
+  // Bio Age: 2-digit number in range 20-60, NOT followed by a decimal digit
+  // (?!\.\d) prevents matching "34" inside "34.28"
+  const bioAgeM = afterTee.match(/\b(2[0-9]|3[0-9]|4[0-5])\b(?!\.\d)/);
+  const bioAge = bioAgeM ? parseInt(bioAgeM[1]) : null;
+
+  // BWI: X.X decimal where X is 4-9, word-boundary at end prevents "4.53" matching as "4.5"
+  const bwiM = afterTee.match(/\b([4-9]\.[0-9])\b/);
+  const bwi = bwiM ? parseFloat(bwiM[1]) : null;
 
   // Segmental (indices 7+ in rangeAll): lAL,lAF,rAL,rAF, tL,tF, lLL,lLF,rLL,rLF
   const segVals = rangeAll.slice(7).map(m => parseFloat(m[1]));
