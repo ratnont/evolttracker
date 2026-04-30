@@ -1234,32 +1234,30 @@ function parseEvoltText(text) {
   const mineral = getP(2);
   const ecf    = getP(3);
 
-  // DEBUG: log full extracted text so we can diagnose BWI/Bio Age extraction
-  if (window._evoltDebug) {
-    console.log('=== EVOLT PDF RAW TEXT (first 3000 chars) ===');
-    console.log(text.slice(0, 3000));
-    console.log('=== END RAW TEXT ===');
-  }
-
-  // Bio Age: item 16 — circular gauge on the right side of the PDF, labeled "BIO AGE"
-  // Search from the label position so we pick up the gauge number, not the person's calendar age
-  let bioAge = null;
+  // Find label positions for both gauges upfront (used by both extractions)
   const bioAgeLblIdx = text.search(/BIO\s*AGE/i);
-  console.log('[DEBUG bioAge] label found at idx:', bioAgeLblIdx, '| window:', JSON.stringify(text.slice(Math.max(0,bioAgeLblIdx), bioAgeLblIdx + 200)));
+  const bwiLblIdx = text.search(/BWI/i);
+
+  // Bio Age (item 16 circular gauge): the label appears far before the actual value in extracted text.
+  // The age number lives between the BIO AGE label and the BWI label (~375 chars away).
+  // It renders as a bare 2-digit number on its own line: "\n38\n"
+  let bioAge = null;
   if (bioAgeLblIdx >= 0) {
-    const bioAgeWindow = text.slice(bioAgeLblIdx, bioAgeLblIdx + 150);
-    const bioAgeM = bioAgeWindow.match(/\b(\d{2})\b(?!\.\d)/);
+    const bioAgeEnd = (bwiLblIdx > bioAgeLblIdx) ? bwiLblIdx : bioAgeLblIdx + 600;
+    const bioAgeWindow = text.slice(bioAgeLblIdx, bioAgeEnd);
+    // Primary: standalone 2-digit number alone on its own line (gauge rendering)
+    let bioAgeM = bioAgeWindow.match(/\n(\d{2})\n/);
+    // Fallback: any standalone 2-digit integer not followed by decimal/range
+    if (!bioAgeM) bioAgeM = bioAgeWindow.match(/\b(\d{2})\b(?!\.\d)(?!\s*[\/\[\-])/);
     if (bioAgeM) { const n = parseInt(bioAgeM[1]); if (n >= 20 && n <= 65) bioAge = n; }
   }
 
-  // BWI Score: item 17 — circular gauge labeled "BWI SCORE", displayed as "X.X/10"
-  // Search from the label position to capture the score, not range values elsewhere
+  // BWI Score (item 17 circular gauge): gauge renders value and denominator on separate lines — "5.7\n10".
+  // Match that specific pattern rather than the first decimal in the window (which is mineral/VFA).
   let bwi = null;
-  const bwiLblIdx = text.search(/BWI/i);
-  console.log('[DEBUG bwi] label found at idx:', bwiLblIdx, '| window:', JSON.stringify(text.slice(Math.max(0,bwiLblIdx), bwiLblIdx + 200)));
   if (bwiLblIdx >= 0) {
-    const bwiWindow = text.slice(bwiLblIdx, bwiLblIdx + 150);
-    const bwiM = bwiWindow.match(/([0-9]\.[0-9]{1,2})\b/);
+    const bwiWindow = text.slice(bwiLblIdx, bwiLblIdx + 300);
+    const bwiM = bwiWindow.match(/(\d+\.\d+)\n10\b/);
     if (bwiM) { const n = parseFloat(bwiM[1]); if (n >= 1 && n <= 10) bwi = n; }
   }
 
