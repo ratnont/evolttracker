@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evolt 360 Body Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161921;
+    --surface2: #1e2330;
+    --border: #2a2f3d;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --card-radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  header {
+    background: linear-gradient(135deg, #0d0f14 0%, #1a1f2e 50%, #0d1520 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  header p { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .scan-count {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .scan-count span { color: var(--accent); font-weight: 700; font-size: 18px; display: block; }
+
+  /* Nav Tabs */
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+  }
+  nav button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    padding: 14px 18px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  nav button:hover { color: var(--text); }
+  nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Main content */
+  main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Progress hero */
+  .hero {
+    background: linear-gradient(135deg, #0f1e2e, #1a1230);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    padding: 28px;
+    margin-bottom: 24px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: center;
+  }
+  .hero h2 { font-size: 28px; font-weight: 800; }
+  .hero h2 span { color: var(--accent); }
+  .hero p { color: var(--muted); margin-top: 6px; font-size: 14px; }
+  .hero-stats { display: flex; gap: 20px; flex-wrap: wrap; }
+  .hero-stat {
+    text-align: center;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 20px;
+    min-width: 100px;
+  }
+  .hero-stat .val { font-size: 26px; font-weight: 800; }
+  .hero-stat .val.down { color: var(--green); }
+  .hero-stat .val.up { color: var(--red); }
+  .hero-stat .label { font-size: 11px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Metric cards */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    padding: 18px;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--card-color, var(--accent));
+  }
+  .metric-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .metric-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+  .metric-card .value { font-size: 28px; font-weight: 800; margin: 6px 0 2px; }
+  .metric-card .unit { font-size: 12px; color: var(--muted); display: inline; }
+  .metric-card .change {
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 6px;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .change.good { background: rgba(16,185,129,0.15); color: var(--green); }
+  .change.bad { background: rgba(239,68,68,0.15); color: var(--red); }
+
+  /* Charts */
+  .chart-section { margin-bottom: 28px; }
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chart-header h3 { font-size: 16px; font-weight: 700; }
+  .chart-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    padding: 20px;
+    position: relative;
+  }
+  .chart-wrap canvas { max-height: 300px; }
+
+  .charts-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 28px;
+  }
+  @media (max-width: 900px) { .charts-2col { grid-template-columns: 1fr; } }
+
+  /* Table */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    overflow: auto;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: var(--surface2);
+    padding: 12px 14px;
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr.latest { background: rgba(0,212,255,0.05); }
+  tbody tr.latest td:first-child { border-left: 3px solid var(--accent); }
+  td { padding: 11px 14px; white-space: nowrap; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-blue { background: rgba(0,212,255,0.15); color: var(--accent); }
+  .badge-green { background: rgba(16,185,129,0.15); color: var(--green); }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-yellow { background: rgba(245,158,11,0.15); color: var(--yellow); }
+
+  /* Segmental / Body View */
+  .body-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 700px) { .body-grid { grid-template-columns: 1fr; } }
+  .segment-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    padding: 20px;
+  }
+  .segment-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 16px; color: var(--accent); }
+  .segment-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .segment-row:last-child { border-bottom: none; }
+  .segment-name { font-size: 13px; color: var(--muted); }
+  .segment-val { font-size: 15px; font-weight: 700; }
+  .segment-bar-wrap { height: 6px; background: var(--border); border-radius: 3px; flex: 1; margin: 0 12px; overflow: hidden; }
+  .segment-bar { height: 100%; border-radius: 3px; }
+
+  /* Scan selector */
+  .scan-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .scan-selector label { font-size: 13px; color: var(--muted); }
+  .scan-selector select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  /* Timeline dots */
+  .timeline-mini {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .timeline-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .timeline-dot.active { background: var(--accent); transform: scale(1.4); }
+  .timeline-dot:hover { background: var(--accent); }
+  .timeline-line { flex: 1; height: 1px; background: var(--border); min-width: 8px; }
+
+  /* Goal tracker */
+  .goal-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    padding: 20px;
+    margin-bottom: 14px;
+  }
+  .goal-header { display: flex; justify-content: space-between; margin-bottom: 12px; }
+  .goal-title { font-size: 14px; font-weight: 600; }
+  .goal-pct { font-size: 14px; font-weight: 700; color: var(--accent); }
+  .progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent2), var(--accent)); transition: width 0.5s; }
+  .goal-meta { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted); }
+
+  /* Tooltip / info */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    padding: 18px;
+  }
+  .info-card h4 { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+  .info-card p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .info-card .range { font-size: 12px; margin-top: 8px; }
+  .range-item { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .range-item:last-child { border: none; }
+  .range-label { color: var(--muted); }
+  .range-val { font-weight: 600; }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 24px;
+    color: var(--muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Chart selector buttons */
+  .chart-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chart-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .chart-btn:hover, .chart-btn.active { background: rgba(0,212,255,0.15); color: var(--accent); border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <h1>Evolt 360 Body Tracker</h1>
+      <p>Ratchanont's Body Composition Journey</p>
+    </div>
+  </div>
+  <div class="scan-count">
+    <span id="totalScans">21</span>
+    Total Scans
+  </div>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('overview')">Overview</button>
+  <button onclick="showTab('charts')">Charts</button>
+  <button onclick="showTab('segmental')">Segmental</button>
+  <button onclick="showTab('history')">History</button>
+  <button onclick="showTab('goals')">Goals</button>
+</nav>
+
+<main>
+
+<!-- OVERVIEW TAB -->
+<div id="tab-overview" class="tab-content active">
+  <div class="hero">
+    <div>
+      <h2>Lost <span id="heroWeightLost">-</span> kg in <span id="heroDays">-</span> days</h2>
+      <p id="heroRange">-</p>
+    </div>
+    <div class="hero-stats" id="heroStats"></div>
+  </div>
+
+  <div class="cards-grid" id="metricsCards"></div>
+
+  <div class="charts-2col">
+    <div class="chart-section">
+      <div class="chart-header"><h3>Weight & Body Fat</h3></div>
+      <div class="chart-wrap"><canvas id="chartOverview1"></canvas></div>
+    </div>
+    <div class="chart-section">
+      <div class="chart-header"><h3>Lean Mass & Muscle</h3></div>
+      <div class="chart-wrap"><canvas id="chartOverview2"></canvas></div>
+    </div>
+  </div>
+
+  <div class="charts-2col">
+    <div class="chart-section">
+      <div class="chart-header"><h3>BWI Score & Bio Age</h3></div>
+      <div class="chart-wrap"><canvas id="chartOverview3"></canvas></div>
+    </div>
+    <div class="chart-section">
+      <div class="chart-header"><h3>Visceral Fat Area</h3></div>
+      <div class="chart-wrap"><canvas id="chartOverview4"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- CHARTS TAB -->
+<div id="tab-charts" class="tab-content">
+  <div class="chart-section">
+    <div class="chart-header">
+      <h3 id="bigChartTitle">Weight (kg)</h3>
+      <div class="chart-btns" id="bigChartBtns"></div>
+    </div>
+    <div class="chart-wrap" style="margin-bottom:24px"><canvas id="chartBig" style="max-height:380px"></canvas></div>
+  </div>
+
+  <div class="charts-2col">
+    <div class="chart-section">
+      <div class="chart-header"><h3>Body Composition Split</h3></div>
+      <div class="chart-wrap"><canvas id="chartBodyComp"></canvas></div>
+    </div>
+    <div class="chart-section">
+      <div class="chart-header"><h3>BMR & TEE (kcal)</h3></div>
+      <div class="chart-wrap"><canvas id="chartEnergy"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-header"><h3>All Metrics Heatmap (Normalized)</h3></div>
+    <div class="chart-wrap"><canvas id="chartRadar" style="max-height:350px"></canvas></div>
+  </div>
+</div>
+
+<!-- SEGMENTAL TAB -->
+<div id="tab-segmental" class="tab-content">
+  <div class="scan-selector">
+    <label>Select Scan:</label>
+    <select id="segScanSelect" onchange="renderSegmental()"></select>
+  </div>
+  <div class="timeline-mini" id="segTimeline"></div>
+  <div class="body-grid" id="segmentalGrid"></div>
+</div>
+
+<!-- HISTORY TAB -->
+<div id="tab-history" class="tab-content">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>Weight</th>
+          <th>Body Fat %</th>
+          <th>Fat Mass</th>
+          <th>LBM</th>
+          <th>SMM</th>
+          <th>Visc. Fat Area</th>
+          <th>Visc. Level</th>
+          <th>BWI</th>
+          <th>Bio Age</th>
+          <th>BMR</th>
+          <th>TEE</th>
+          <th>vs Prev</th>
+        </tr>
+      </thead>
+      <tbody id="historyTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- GOALS TAB -->
+<div id="tab-goals" class="tab-content">
+  <div id="goalsContainer"></div>
+  <div style="margin-top:28px">
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Metrics Reference</h3>
+    <div class="info-grid" id="infoGrid"></div>
+  </div>
+</div>
+
+</main>
+
+<footer>Evolt 360 Body Tracker · Data from 21 scans (Jul 2025 – Apr 2026) · Built with Chart.js</footer>
+
+<script>
+// ─── DATA ──────────────────────────────────────────────────────────────────
+const scans = [
+  { date: '10-07-2025', weight: 132.2, lbm: 83.8, smm: 45.8, bfPct: 36.6, bfm: 48.4, vfa: 179, vfl: 15, bwi: 5.4, bioAge: 38, bmr: 2180, tee: 3357,
+    seg: { lArmLean:3.6, rArmLean:3.8, lLegLean:20.8, rLegLean:20.9, torsoLean:35.0, lArmFat:2.7, rArmFat:2.6, lLegFat:9.8, rLegFat:9.9, torsoFat:21.8 },
+    protein: 51.7, mineral: 4.2, tbw: 61.3, icf: 39.4, ecf: 21.9, subFat: 40.4 },
+  { date: '28-08-2025', weight: 130.3, lbm: 85.5, smm: 46.9, bfPct: 34.4, bfm: 44.8, vfa: 157, vfl: 14, bwi: 5.7, bioAge: 37, bmr: 2216, tee: 3412,
+    seg: { lArmLean:3.7, rArmLean:3.9, lLegLean:21.3, rLegLean:21.4, torsoLean:35.4, lArmFat:2.4, rArmFat:2.4, lLegFat:9.0, rLegFat:9.0, torsoFat:20.0 },
+    protein: 52.8, mineral: 4.3, tbw: 62.6, icf: 40.2, ecf: 22.4, subFat: 37.3 },
+  { date: '11-09-2025', weight: 130.5, lbm: 89.6, smm: 49.3, bfPct: 31.3, bfm: 40.9, vfa: 129, vfl: 13, bwi: 6.3, bioAge: 35, bmr: 2305, tee: 3549,
+    seg: { lArmLean:3.9, rArmLean:4.1, lLegLean:22.4, rLegLean:22.5, torsoLean:36.8, lArmFat:2.0, rArmFat:2.0, lLegFat:7.8, rLegFat:7.8, torsoFat:19.2 },
+    protein: 55.2, mineral: 4.5, tbw: 65.6, icf: 42.2, ecf: 23.4, subFat: 33.8 },
+  { date: '02-10-2025', weight: 128.6, lbm: 88.6, smm: 48.8, bfPct: 31.1, bfm: 40.0, vfa: 127, vfl: 13, bwi: 6.3, bioAge: 35, bmr: 2283, tee: 3515,
+    seg: { lArmLean:3.8, rArmLean:4.0, lLegLean:22.2, rLegLean:22.3, torsoLean:36.5, lArmFat:2.0, rArmFat:2.0, lLegFat:7.7, rLegFat:7.8, torsoFat:18.8 },
+    protein: 54.6, mineral: 4.4, tbw: 64.8, icf: 41.6, ecf: 23.2, subFat: 33.1 },
+  { date: '16-10-2025', weight: 126.4, lbm: 86.0, smm: 47.3, bfPct: 32.0, bfm: 40.4, vfa: 135, vfl: 13, bwi: 6.0, bioAge: 36, bmr: 2227, tee: 3429,
+    seg: { lArmLean:3.7, rArmLean:3.9, lLegLean:21.5, rLegLean:21.6, torsoLean:35.5, lArmFat:2.1, rArmFat:2.1, lLegFat:8.0, rLegFat:8.0, torsoFat:19.6 },
+    protein: 53.0, mineral: 4.3, tbw: 62.9, icf: 40.4, ecf: 22.5, subFat: 33.7 },
+  { date: '11-11-2025', weight: 127.0, lbm: 87.9, smm: 48.4, bfPct: 30.8, bfm: 39.1, vfa: 125, vfl: 12, bwi: 6.3, bioAge: 35, bmr: 2268, tee: 3492,
+    seg: { lArmLean:3.8, rArmLean:4.0, lLegLean:22.0, rLegLean:22.0, torsoLean:36.3, lArmFat:1.9, rArmFat:1.9, lLegFat:7.5, rLegFat:7.5, torsoFat:18.9 },
+    protein: 54.2, mineral: 4.4, tbw: 64.3, icf: 41.3, ecf: 23.0, subFat: 32.3 },
+  { date: '14-01-2026', weight: 122.5, lbm: 81.9, smm: 45.0, bfPct: 33.1, bfm: 40.6, vfa: 144, vfl: 14, bwi: 6.0, bioAge: 36, bmr: 2139, tee: 3294,
+    seg: { lArmLean:3.5, rArmLean:3.7, lLegLean:20.5, rLegLean:20.5, torsoLean:33.9, lArmFat:2.2, rArmFat:2.2, lLegFat:8.3, rLegFat:8.3, torsoFat:19.5 },
+    protein: 50.5, mineral: 4.1, tbw: 59.9, icf: 38.5, ecf: 21.4, subFat: 33.9 },
+  { date: '20-01-2026', weight: 121.8, lbm: 86.2, smm: 47.6, bfPct: 29.2, bfm: 35.6, vfa: 114, vfl: 12, bwi: 6.6, bioAge: 34, bmr: 2231, tee: 3435,
+    seg: { lArmLean:3.8, rArmLean:4.0, lLegLean:21.6, rLegLean:21.7, torsoLean:35.4, lArmFat:1.7, rArmFat:1.7, lLegFat:6.7, rLegFat:6.7, torsoFat:17.0 },
+    protein: 53.1, mineral: 4.3, tbw: 63.1, icf: 40.6, ecf: 22.5, subFat: 29.3 },
+  { date: '09-02-2026', weight: 120.6, lbm: 86.8, smm: 47.9, bfPct: 28.0, bfm: 33.8, vfa: 103, vfl: 11, bwi: 6.6, bioAge: 34, bmr: 2244, tee: 3455,
+    seg: { lArmLean:3.8, rArmLean:4.0, lLegLean:21.8, rLegLean:21.8, torsoLean:35.6, lArmFat:1.6, rArmFat:1.6, lLegFat:6.3, rLegFat:6.4, torsoFat:16.1 },
+    protein: 53.5, mineral: 4.3, tbw: 63.5, icf: 40.9, ecf: 22.6, subFat: 27.5 },
+  { date: '13-02-2026', weight: 120.3, lbm: 85.9, smm: 47.4, bfPct: 28.6, bfm: 34.4, vfa: 109, vfl: 11, bwi: 6.6, bioAge: 34, bmr: 2225, tee: 3426,
+    seg: { lArmLean:3.7, rArmLean:3.9, lLegLean:21.5, rLegLean:21.6, torsoLean:35.3, lArmFat:1.7, rArmFat:1.7, lLegFat:6.5, rLegFat:6.5, torsoFat:16.6 },
+    protein: 52.9, mineral: 4.3, tbw: 62.8, icf: 40.4, ecf: 22.4, subFat: 28.2 },
+  { date: '20-02-2026', weight: 119.9, lbm: 87.4, smm: 48.3, bfPct: 27.1, bfm: 32.5, vfa: 96, vfl: 10, bwi: 6.6, bioAge: 34, bmr: 2257, tee: 3475,
+    seg: { lArmLean:3.8, rArmLean:4.1, lLegLean:21.9, rLegLean:21.9, torsoLean:35.8, lArmFat:1.5, rArmFat:1.5, lLegFat:6.1, rLegFat:6.1, torsoFat:15.6 },
+    protein: 53.9, mineral: 4.4, tbw: 63.9, icf: 41.1, ecf: 22.8, subFat: 26.5 },
+  { date: '04-03-2026', weight: 118.5, lbm: 88.4, smm: 48.9, bfPct: 25.4, bfm: 30.1, vfa: 84, vfl: 9, bwi: 6.9, bioAge: 33, bmr: 2279, tee: 3509,
+    seg: { lArmLean:3.9, rArmLean:4.1, lLegLean:22.1, rLegLean:22.2, torsoLean:36.3, lArmFat:1.4, rArmFat:1.4, lLegFat:5.5, rLegFat:5.5, torsoFat:14.4 },
+    protein: 54.5, mineral: 4.4, tbw: 64.7, icf: 41.6, ecf: 23.1, subFat: 24.4 },
+  { date: '10-03-2026', weight: 117.9, lbm: 87.9, smm: 48.7, bfPct: 25.4, bfm: 30.0, vfa: 84, vfl: 9, bwi: 6.9, bioAge: 33, bmr: 2268, tee: 3492,
+    seg: { lArmLean:3.9, rArmLean:4.1, lLegLean:21.9, rLegLean:22.0, torsoLean:36.2, lArmFat:1.4, rArmFat:1.4, lLegFat:5.5, rLegFat:5.6, torsoFat:14.4 },
+    protein: 54.2, mineral: 4.4, tbw: 64.3, icf: 41.3, ecf: 23.0, subFat: 24.3 },
+  { date: '17-03-2026', weight: 116.2, lbm: 85.6, smm: 47.3, bfPct: 26.3, bfm: 30.6, vfa: 90, vfl: 10, bwi: 6.9, bioAge: 33, bmr: 2218, tee: 3415,
+    seg: { lArmLean:3.7, rArmLean:3.9, lLegLean:21.4, rLegLean:21.5, torsoLean:35.4, lArmFat:1.5, rArmFat:1.5, lLegFat:5.7, rLegFat:5.8, torsoFat:14.8 },
+    protein: 52.8, mineral: 4.3, tbw: 62.6, icf: 40.2, ecf: 22.4, subFat: 24.9 },
+  { date: '25-03-2026', weight: 114.7, lbm: 85.5, smm: 47.3, bfPct: 25.5, bfm: 29.2, vfa: 84, vfl: 9, bwi: 6.9, bioAge: 33, bmr: 2216, tee: 3412,
+    seg: { lArmLean:3.7, rArmLean:3.9, lLegLean:21.4, rLegLean:21.4, torsoLean:35.3, lArmFat:1.4, rArmFat:1.4, lLegFat:5.4, rLegFat:5.4, torsoFat:14.1 },
+    protein: 52.7, mineral: 4.3, tbw: 62.5, icf: 40.2, ecf: 22.3, subFat: 23.7 },
+  { date: '28-03-2026', weight: 113.9, lbm: 86.4, smm: 47.9, bfPct: 24.1, bfm: 27.5, vfa: 78, vfl: 9, bwi: 6.9, bioAge: 33, bmr: 2236, tee: 3443,
+    seg: { lArmLean:3.8, rArmLean:4.0, lLegLean:21.6, rLegLean:21.6, torsoLean:35.6, lArmFat:1.3, rArmFat:1.3, lLegFat:5.0, rLegFat:5.0, torsoFat:13.3 },
+    protein: 53.3, mineral: 4.3, tbw: 63.2, icf: 40.6, ecf: 22.6, subFat: 22.2 },
+  { date: '31-03-2026', weight: 114.4, lbm: 85.1, smm: 47.2, bfPct: 25.6, bfm: 29.3, vfa: 85, vfl: 9, bwi: 6.9, bioAge: 33, bmr: 2208, tee: 3400,
+    seg: { lArmLean:3.7, rArmLean:3.9, lLegLean:21.3, rLegLean:21.3, torsoLean:35.1, lArmFat:1.4, rArmFat:1.4, lLegFat:5.5, rLegFat:5.5, torsoFat:14.1 },
+    protein: 52.4, mineral: 4.3, tbw: 62.2, icf: 40.0, ecf: 22.2, subFat: 23.8 },
+  { date: '07-04-2026', weight: 113.1, lbm: 87.1, smm: 48.4, bfPct: 23.0, bfm: 26.0, vfa: 75, vfl: 8, bwi: 7.2, bioAge: 32, bmr: 2251, tee: 3466,
+    seg: { lArmLean:3.8, rArmLean:4.0, lLegLean:21.7, rLegLean:21.7, torsoLean:35.9, lArmFat:1.2, rArmFat:1.2, lLegFat:4.7, rLegFat:4.7, torsoFat:12.5 },
+    protein: 53.7, mineral: 4.4, tbw: 63.7, icf: 41.0, ecf: 22.7, subFat: 21.0 },
+  { date: '17-04-2026', weight: 112.0, lbm: 86.7, smm: 48.2, bfPct: 22.6, bfm: 25.3, vfa: 74, vfl: 8, bwi: 7.2, bioAge: 33, bmr: 2242, tee: 3452,
+    seg: { lArmLean:3.8, rArmLean:4.0, lLegLean:21.6, rLegLean:21.6, torsoLean:35.7, lArmFat:1.2, rArmFat:1.2, lLegFat:4.6, rLegFat:4.6, torsoFat:12.3 },
+    protein: 53.4, mineral: 4.3, tbw: 63.4, icf: 40.8, ecf: 22.6, subFat: 20.4 },
+  { date: '22-04-2026', weight: 113.0, lbm: 88.1, smm: 48.9, bfPct: 22.0, bfm: 24.9, vfa: 74, vfl: 8, bwi: 7.2, bioAge: 33, bmr: 2272, tee: 3498,
+    seg: { lArmLean:3.9, rArmLean:4.1, lLegLean:22.0, rLegLean:22.0, torsoLean:36.3, lArmFat:1.1, rArmFat:1.1, lLegFat:4.5, rLegFat:4.5, torsoFat:12.0 },
+    protein: 54.3, mineral: 4.4, tbw: 64.5, icf: 41.5, ecf: 23.0, subFat: 20.1 },
+  { date: '29-04-2026', weight: 110.5, lbm: 80.8, smm: 44.6, bfPct: 26.9, bfm: 29.7, vfa: 95, vfl: 10, bwi: 6.6, bioAge: 35, bmr: 2115, tee: 3257,
+    seg: { lArmLean:3.5, rArmLean:3.7, lLegLean:20.2, rLegLean:20.3, torsoLean:33.4, lArmFat:1.5, rArmFat:1.5, lLegFat:5.9, rLegFat:5.9, torsoFat:13.9 },
+    protein: 49.8, mineral: 4.0, tbw: 59.1, icf: 38.0, ecf: 21.1, subFat: 24.1 },
+];
+
+const labels = scans.map(s => s.date);
+const first = scans[0];
+const last = scans[scans.length - 1];
+
+// ─── HELPERS ────────────────────────────────────────────────────────────────
+function parseDate(str) {
+  const [d,m,y] = str.split('-');
+  return new Date(y, m-1, d);
+}
+function daysBetween(a, b) {
+  return Math.round(Math.abs(parseDate(b) - parseDate(a)) / 86400000);
+}
+function fmtDate(str) {
+  const [d,m,y] = str.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${parseInt(d)} ${months[parseInt(m)-1]} ${y}`;
+}
+function signStr(v, decimals=1) {
+  return (v >= 0 ? '+' : '') + v.toFixed(decimals);
+}
+
+// ─── CHART DEFAULTS ─────────────────────────────────────────────────────────
+Chart.defaults.color = '#64748b';
+Chart.defaults.borderColor = '#2a2f3d';
+const chartFont = { family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", size: 11 };
+
+function lineOpts(y1Label, y1Color, y2Label, y2Color) {
+  const opts = {
+    responsive: true,
+    maintainAspectRatio: true,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { font: chartFont, boxWidth: 12, padding: 12 } },
+      tooltip: {
+        backgroundColor: '#1e2330',
+        borderColor: '#2a2f3d',
+        borderWidth: 1,
+        titleFont: { ...chartFont, weight: 'bold' },
+        bodyFont: chartFont,
+        padding: 10,
+      }
+    },
+    scales: {
+      x: { grid: { color: '#1e2330' }, ticks: { font: chartFont, maxRotation: 45 } },
+      y: { grid: { color: '#1e2330' }, ticks: { font: chartFont }, title: { display: !!y1Label, text: y1Label, font: chartFont } }
+    }
+  };
+  if (y2Label) {
+    opts.scales.y2 = { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: chartFont }, title: { display: true, text: y2Label, font: chartFont } };
+  }
+  return opts;
+}
+
+function makeDataset(label, data, color, yAxisID, fill=false, tension=0.35) {
+  return {
+    label, data,
+    borderColor: color,
+    backgroundColor: fill ? color.replace(')', ', 0.12)').replace('rgb', 'rgba') : color,
+    borderWidth: 2,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    tension,
+    fill,
+    yAxisID: yAxisID || 'y'
+  };
+}
+
+// ─── TABS ───────────────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ─── OVERVIEW ───────────────────────────────────────────────────────────────
+function initOverview() {
+  const days = daysBetween(first.date, last.date);
+  const wLost = (first.weight - last.weight).toFixed(1);
+  const fatLost = (first.bfm - last.bfm).toFixed(1);
+  const bfDrop = (first.bfPct - last.bfPct).toFixed(1);
+  const bioAgeDrop = first.bioAge - last.bioAge;
+  const bwiGain = (last.bwi - first.bwi).toFixed(1);
+
+  document.getElementById('heroWeightLost').textContent = wLost;
+  document.getElementById('heroDays').textContent = days;
+  document.getElementById('heroRange').textContent = `${fmtDate(first.date)} → ${fmtDate(last.date)}`;
+
+  const heroData = [
+    { val: `-${wLost}`, unit: 'kg', label: 'Weight Lost', cls: 'down' },
+    { val: `-${fatLost}`, unit: 'kg', label: 'Fat Lost', cls: 'down' },
+    { val: `-${bfDrop}`, unit: '%', label: 'Body Fat %', cls: 'down' },
+    { val: `+${bwiGain}`, unit: '', label: 'BWI Score', cls: 'down' },
+    { val: `-${bioAgeDrop}`, unit: 'yrs', label: 'Bio Age', cls: 'down' },
+  ];
+  document.getElementById('heroStats').innerHTML = heroData.map(d =>
+    `<div class="hero-stat">
+      <div class="val ${d.cls}">${d.val}<span style="font-size:14px">${d.unit}</span></div>
+      <div class="label">${d.label}</div>
+    </div>`
+  ).join('');
+
+  const metrics = [
+    { key:'weight', label:'Weight', unit:'kg', color:'rgb(0,212,255)', goodDown:true },
+    { key:'bfPct', label:'Body Fat', unit:'%', color:'rgb(239,68,68)', goodDown:true },
+    { key:'bfm', label:'Fat Mass', unit:'kg', color:'rgb(245,158,11)', goodDown:true },
+    { key:'lbm', label:'Lean Body Mass', unit:'kg', color:'rgb(16,185,129)', goodDown:false },
+    { key:'smm', label:'Muscle Mass', unit:'kg', color:'rgb(124,58,237)', goodDown:false },
+    { key:'vfa', label:'Visceral Fat Area', unit:'cm²', color:'rgb(239,68,68)', goodDown:true },
+    { key:'vfl', label:'Visceral Level', unit:'', color:'rgb(239,68,68)', goodDown:true },
+    { key:'bwi', label:'BWI Score', unit:'', color:'rgb(0,212,255)', goodDown:false },
+    { key:'bioAge', label:'Bio Age', unit:'yrs', color:'rgb(16,185,129)', goodDown:true },
+    { key:'bmr', label:'BMR', unit:'kcal', color:'rgb(245,158,11)', goodDown:false },
+  ];
+
+  document.getElementById('metricsCards').innerHTML = metrics.map(m => {
+    const chg = last[m.key] - first[m.key];
+    const goodChg = m.goodDown ? chg < 0 : chg > 0;
+    const pct = ((chg / first[m.key]) * 100).toFixed(1);
+    return `<div class="metric-card" style="--card-color:${m.color}">
+      <div class="label">${m.label}</div>
+      <div class="value">${last[m.key]}<span class="unit"> ${m.unit}</span></div>
+      <span class="change ${goodChg ? 'good' : 'bad'}">${chg >= 0 ? '↑' : '↓'} ${Math.abs(chg).toFixed(1)} (${Math.abs(pct)}%)</span>
+    </div>`;
+  }).join('');
+
+  // Chart 1: Weight + BF%
+  new Chart(document.getElementById('chartOverview1'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        makeDataset('Weight (kg)', scans.map(s=>s.weight), 'rgb(0,212,255)', 'y', true),
+        makeDataset('Body Fat % ', scans.map(s=>s.bfPct), 'rgb(239,68,68)', 'y2'),
+      ]
+    },
+    options: lineOpts('Weight (kg)', '', 'Body Fat %', '')
+  });
+
+  // Chart 2: LBM + SMM
+  new Chart(document.getElementById('chartOverview2'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        makeDataset('Lean Body Mass (kg)', scans.map(s=>s.lbm), 'rgb(16,185,129)', 'y', true),
+        makeDataset('Muscle Mass (kg)', scans.map(s=>s.smm), 'rgb(124,58,237)', 'y'),
+      ]
+    },
+    options: lineOpts('kg')
+  });
+
+  // Chart 3: BWI + Bio Age
+  new Chart(document.getElementById('chartOverview3'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        makeDataset('BWI Score', scans.map(s=>s.bwi), 'rgb(0,212,255)', 'y', true),
+        makeDataset('Bio Age', scans.map(s=>s.bioAge), 'rgb(245,158,11)', 'y2'),
+      ]
+    },
+    options: lineOpts('BWI Score', '', 'Bio Age (yrs)', '')
+  });
+
+  // Chart 4: VFA
+  new Chart(document.getElementById('chartOverview4'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        makeDataset('Visceral Fat Area (cm²)', scans.map(s=>s.vfa), 'rgb(239,68,68)', 'y', true),
+        makeDataset('Visceral Level', scans.map(s=>s.vfl), 'rgb(245,158,11)', 'y2'),
+      ]
+    },
+    options: lineOpts('Area (cm²)', '', 'Level', '')
+  });
+}
+
+// ─── CHARTS TAB ─────────────────────────────────────────────────────────────
+const bigChartMetrics = [
+  { key:'weight', label:'Weight (kg)' },
+  { key:'bfPct', label:'Body Fat (%)' },
+  { key:'bfm', label:'Fat Mass (kg)' },
+  { key:'lbm', label:'Lean Body Mass (kg)' },
+  { key:'smm', label:'Muscle Mass (kg)' },
+  { key:'vfa', label:'Visceral Fat Area (cm²)' },
+  { key:'vfl', label:'Visceral Level' },
+  { key:'bwi', label:'BWI Score' },
+  { key:'bioAge', label:'Bio Age (yrs)' },
+  { key:'bmr', label:'BMR (kcal)' },
+  { key:'tee', label:'TEE (kcal)' },
+];
+let bigChart = null;
+let currentMetric = 'weight';
+
+function renderBigChart(metricKey) {
+  currentMetric = metricKey;
+  const m = bigChartMetrics.find(x => x.key === metricKey);
+  document.getElementById('bigChartTitle').textContent = m.label;
+  document.querySelectorAll('.chart-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.key === metricKey);
+  });
+  const data = scans.map(s => s[metricKey]);
+  const colors = {
+    weight: 'rgb(0,212,255)', bfPct: 'rgb(239,68,68)', bfm: 'rgb(245,158,11)',
+    lbm: 'rgb(16,185,129)', smm: 'rgb(124,58,237)', vfa: 'rgb(239,68,68)',
+    vfl: 'rgb(239,100,68)', bwi: 'rgb(0,212,255)', bioAge: 'rgb(245,158,11)',
+    bmr: 'rgb(16,185,129)', tee: 'rgb(124,58,237)'
+  };
+  if (bigChart) bigChart.destroy();
+  bigChart = new Chart(document.getElementById('chartBig'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: m.label,
+        data,
+        borderColor: colors[metricKey] || 'rgb(0,212,255)',
+        backgroundColor: (colors[metricKey] || 'rgb(0,212,255)').replace('rgb(','rgba(').replace(')',',0.1)'),
+        borderWidth: 2.5,
+        pointRadius: 5,
+        pointHoverRadius: 8,
+        tension: 0.35,
+        fill: true,
+      }]
+    },
+    options: {
+      ...lineOpts(m.label),
+      plugins: {
+        ...lineOpts(m.label).plugins,
+        annotation: {
+          annotations: {
+            avg: {
+              type: 'line',
+              yMin: data.reduce((a,b)=>a+b,0)/data.length,
+              yMax: data.reduce((a,b)=>a+b,0)/data.length,
+              borderColor: 'rgba(255,255,255,0.15)',
+              borderWidth: 1,
+              borderDash: [6,4],
+              label: {
+                content: 'avg',
+                display: true,
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                font: { size: 10 },
+                position: 'start'
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function initCharts() {
+  const btns = document.getElementById('bigChartBtns');
+  btns.innerHTML = bigChartMetrics.map(m =>
+    `<button class="chart-btn${m.key==='weight'?' active':''}" data-key="${m.key}" onclick="renderBigChart('${m.key}')">${m.label.replace(' (kg)','').replace(' (%)','').replace(' (cm²)','').replace(' (kcal)','').replace(' (yrs)','')}</button>`
+  ).join('');
+  renderBigChart('weight');
+
+  // Body comp stacked
+  new Chart(document.getElementById('chartBodyComp'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label:'Fat Mass (kg)', data: scans.map(s=>s.bfm), backgroundColor:'rgba(239,68,68,0.7)', stack:'a' },
+        { label:'Lean Mass (kg)', data: scans.map(s=>s.lbm), backgroundColor:'rgba(16,185,129,0.7)', stack:'a' },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { labels: { font: chartFont, boxWidth: 12 } }, tooltip: { backgroundColor:'#1e2330', borderColor:'#2a2f3d', borderWidth:1 } },
+      scales: {
+        x: { stacked:true, grid:{color:'#1e2330'}, ticks:{font:chartFont,maxRotation:45} },
+        y: { stacked:true, grid:{color:'#1e2330'}, ticks:{font:chartFont} }
+      }
+    }
+  });
+
+  // Energy
+  new Chart(document.getElementById('chartEnergy'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        makeDataset('BMR (kcal)', scans.map(s=>s.bmr), 'rgb(245,158,11)', 'y', true),
+        makeDataset('TEE (kcal)', scans.map(s=>s.tee), 'rgb(124,58,237)', 'y'),
+      ]
+    },
+    options: lineOpts('kcal')
+  });
+
+  // Radar - normalized latest vs first
+  const rMetrics = ['weight','lbm','smm','bfPct','vfa','bwi','bioAge','bmr'];
+  const rLabels = ['Weight','Lean Mass','Muscle','Body Fat%','Visceral Fat','BWI Score','Bio Age','BMR'];
+  function normalize(vals) {
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    return vals.map(v => ((v-mn)/(mx-mn)*100).toFixed(1));
+  }
+  const firstNorm = rMetrics.map(k => {
+    const vals = scans.map(s=>s[k]);
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    return ((first[k]-mn)/(mx-mn)*100).toFixed(1);
+  });
+  const lastNorm = rMetrics.map(k => {
+    const vals = scans.map(s=>s[k]);
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    return ((last[k]-mn)/(mx-mn)*100).toFixed(1);
+  });
+
+  new Chart(document.getElementById('chartRadar'), {
+    type: 'radar',
+    data: {
+      labels: rLabels,
+      datasets: [
+        { label: fmtDate(first.date), data: firstNorm, borderColor:'rgba(239,68,68,0.8)', backgroundColor:'rgba(239,68,68,0.1)', pointRadius:4, pointBackgroundColor:'rgba(239,68,68,0.8)' },
+        { label: fmtDate(last.date), data: lastNorm, borderColor:'rgba(0,212,255,0.8)', backgroundColor:'rgba(0,212,255,0.1)', pointRadius:4, pointBackgroundColor:'rgba(0,212,255,0.8)' },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { labels: { font: chartFont, boxWidth: 12 } }, tooltip: { backgroundColor:'#1e2330', borderColor:'#2a2f3d', borderWidth:1 } },
+      scales: { r: { grid: { color:'#2a2f3d' }, ticks: { display:false }, pointLabels: { font: chartFont, color:'#94a3b8' } } }
+    }
+  });
+}
+
+// ─── SEGMENTAL ───────────────────────────────────────────────────────────────
+function initSegmental() {
+  const sel = document.getElementById('segScanSelect');
+  sel.innerHTML = scans.map((s,i) => `<option value="${i}"${i===scans.length-1?' selected':''}>${fmtDate(s.date)}</option>`).join('');
+  const timeline = document.getElementById('segTimeline');
+  timeline.innerHTML = scans.map((s,i) =>
+    `<div class="timeline-dot${i===scans.length-1?' active':''}" title="${fmtDate(s.date)}" onclick="selectSegScan(${i})"></div>${i<scans.length-1?'<div class="timeline-line"></div>':''}`
+  ).join('');
+  renderSegmental();
+}
+
+function selectSegScan(i) {
+  document.getElementById('segScanSelect').value = i;
+  document.querySelectorAll('.timeline-dot').forEach((d,j) => d.classList.toggle('active', j===i));
+  renderSegmental();
+}
+
+function renderSegmental() {
+  const i = parseInt(document.getElementById('segScanSelect').value);
+  const s = scans[i];
+  const maxLean = 40, maxFat = 12;
+
+  document.querySelectorAll('.timeline-dot').forEach((d,j) => d.classList.toggle('active', j===i));
+
+  const parts = [
+    { name:'Left Arm', lean: s.seg.lArmLean, fat: s.seg.lArmFat, maxL:5, maxF:4 },
+    { name:'Right Arm', lean: s.seg.rArmLean, fat: s.seg.rArmFat, maxL:5, maxF:4 },
+    { name:'Left Leg', lean: s.seg.lLegLean, fat: s.seg.lLegFat, maxL:25, maxF:12 },
+    { name:'Right Leg', lean: s.seg.rLegLean, fat: s.seg.rLegFat, maxL:25, maxF:12 },
+    { name:'Torso', lean: s.seg.torsoLean, fat: s.seg.torsoFat, maxL:40, maxF:25 },
+  ];
+
+  document.getElementById('segmentalGrid').innerHTML = `
+    <div class="segment-card">
+      <h4>Lean Mass by Segment (kg)</h4>
+      ${parts.map(p => `
+        <div class="segment-row">
+          <span class="segment-name">${p.name}</span>
+          <div class="segment-bar-wrap">
+            <div class="segment-bar" style="width:${(p.lean/p.maxL*100).toFixed(0)}%;background:linear-gradient(90deg,rgb(16,185,129),rgba(16,185,129,0.5))"></div>
+          </div>
+          <span class="segment-val">${p.lean}</span>
+        </div>`).join('')}
+    </div>
+    <div class="segment-card">
+      <h4>Fat Mass by Segment (kg)</h4>
+      ${parts.map(p => `
+        <div class="segment-row">
+          <span class="segment-name">${p.name}</span>
+          <div class="segment-bar-wrap">
+            <div class="segment-bar" style="width:${(p.fat/p.maxF*100).toFixed(0)}%;background:linear-gradient(90deg,rgb(239,68,68),rgba(239,68,68,0.5))"></div>
+          </div>
+          <span class="segment-val">${p.fat}</span>
+        </div>`).join('')}
+    </div>
+    <div class="segment-card">
+      <h4>Body Composition</h4>
+      <div class="segment-row"><span class="segment-name">Total Weight</span><span class="segment-val">${s.weight} kg</span></div>
+      <div class="segment-row"><span class="segment-name">Protein</span><span class="segment-val">${s.protein} kg</span></div>
+      <div class="segment-row"><span class="segment-name">Mineral</span><span class="segment-val">${s.mineral} kg</span></div>
+      <div class="segment-row"><span class="segment-name">Total Body Water</span><span class="segment-val">${s.tbw} L</span></div>
+      <div class="segment-row"><span class="segment-name">Intracellular Fluid</span><span class="segment-val">${s.icf} L</span></div>
+      <div class="segment-row"><span class="segment-name">Extracellular Fluid</span><span class="segment-val">${s.ecf} L</span></div>
+      <div class="segment-row"><span class="segment-name">Subcutaneous Fat</span><span class="segment-val">${s.subFat} kg</span></div>
+      <div class="segment-row"><span class="segment-name">Visceral Fat Mass</span><span class="segment-val">${(s.bfm - s.subFat).toFixed(1)} kg</span></div>
+    </div>
+    <div class="segment-card">
+      <h4>Scan Summary — ${fmtDate(s.date)}</h4>
+      <div class="segment-row"><span class="segment-name">BWI Score</span><span class="segment-val" style="color:var(--accent)">${s.bwi}</span></div>
+      <div class="segment-row"><span class="segment-name">Bio Age</span><span class="segment-val">${s.bioAge} yrs</span></div>
+      <div class="segment-row"><span class="segment-name">Visceral Fat Area</span><span class="segment-val">${s.vfa} cm²</span></div>
+      <div class="segment-row"><span class="segment-name">Visceral Level</span><span class="segment-val">${s.vfl}</span></div>
+      <div class="segment-row"><span class="segment-name">BMR</span><span class="segment-val">${s.bmr} kcal</span></div>
+      <div class="segment-row"><span class="segment-name">TEE</span><span class="segment-val">${s.tee} kcal</span></div>
+    </div>
+  `;
+}
+
+// ─── HISTORY TABLE ───────────────────────────────────────────────────────────
+function initHistory() {
+  const tbody = document.getElementById('historyTable');
+  tbody.innerHTML = scans.map((s,i) => {
+    const prev = i > 0 ? scans[i-1] : null;
+    const wChg = prev ? (s.weight - prev.weight).toFixed(1) : null;
+    const isLatest = i === scans.length - 1;
+    const badge = wChg === null ? '' : wChg <= 0
+      ? `<span class="badge badge-green">${wChg} kg</span>`
+      : `<span class="badge badge-red">+${wChg} kg</span>`;
+
+    let bwiClass = 'badge-red';
+    if (s.bwi >= 7) bwiClass = 'badge-green';
+    else if (s.bwi >= 6) bwiClass = 'badge-blue';
+    else if (s.bwi >= 5) bwiClass = 'badge-yellow';
+
+    return `<tr class="${isLatest?'latest':''}">
+      <td>${i+1}</td>
+      <td>${fmtDate(s.date)}</td>
+      <td class="num"><strong>${s.weight}</strong> kg</td>
+      <td class="num">${s.bfPct}%</td>
+      <td class="num">${s.bfm} kg</td>
+      <td class="num">${s.lbm} kg</td>
+      <td class="num">${s.smm} kg</td>
+      <td class="num">${s.vfa} cm²</td>
+      <td class="num">${s.vfl}</td>
+      <td class="num"><span class="badge ${bwiClass}">${s.bwi}</span></td>
+      <td class="num">${s.bioAge} yrs</td>
+      <td class="num">${s.bmr}</td>
+      <td class="num">${s.tee}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).reverse().join('');
+}
+
+// ─── GOALS ───────────────────────────────────────────────────────────────────
+function initGoals() {
+  const goals = [
+    { name:'Reach 100 kg Weight', start: first.weight, current: last.weight, target: 100, unit:'kg', goodDown:true },
+    { name:'Body Fat Under 20%', start: first.bfPct, current: last.bfPct, target: 20, unit:'%', goodDown:true },
+    { name:'Visceral Fat Under 60 cm²', start: first.vfa, current: last.vfa, target: 60, unit:'cm²', goodDown:true },
+    { name:'BWI Score 8.0', start: first.bwi, current: last.bwi, target: 8.0, unit:'', goodDown:false },
+    { name:'Bio Age Under 30 yrs', start: first.bioAge, current: last.bioAge, target: 30, unit:'yrs', goodDown:true },
+    { name:'Visceral Level Under 6', start: first.vfl, current: last.vfl, target: 6, unit:'', goodDown:true },
+  ];
+
+  document.getElementById('goalsContainer').innerHTML = `
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Progress Toward Goals</h3>
+    ${goals.map(g => {
+      let pct;
+      if (g.goodDown) {
+        const total = g.start - g.target;
+        const done = g.start - g.current;
+        pct = Math.min(100, Math.max(0, (done/total)*100));
+      } else {
+        const total = g.target - g.start;
+        const done = g.current - g.start;
+        pct = Math.min(100, Math.max(0, (done/total)*100));
+      }
+      const done = pct >= 100;
+      return `<div class="goal-card">
+        <div class="goal-header">
+          <div class="goal-title">${g.name} ${done ? '✓' : ''}</div>
+          <div class="goal-pct">${pct.toFixed(0)}%</div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;${done?'background:var(--green)':''}"></div></div>
+        <div class="goal-meta">
+          <span>Start: ${g.start}${g.unit}</span>
+          <span>Now: ${g.current}${g.unit}</span>
+          <span>Goal: ${g.target}${g.unit}</span>
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+
+  const infoItems = [
+    { title:'BWI Score', desc:'Body Weight Index — Evolt\'s proprietary health score combining multiple biomarkers. Higher is better.', ranges:[{l:'< 5.0',v:'Poor'},{l:'5.0–5.9',v:'Below Avg'},{l:'6.0–6.9',v:'Average'},{l:'7.0–7.9',v:'Good'},{l:'≥ 8.0',v:'Excellent'}] },
+    { title:'Visceral Fat Area', desc:'Fat surrounding internal organs, measured in cm². Strongly linked to metabolic disease risk.', ranges:[{l:'< 100 cm²',v:'Normal'},{l:'100–160 cm²',v:'Elevated'},{l:'> 160 cm²',v:'High Risk'}] },
+    { title:'Visceral Fat Level', desc:'A level score (Evolt scale) for visceral fat accumulation.', ranges:[{l:'1–9',v:'Normal range'},{l:'10–14',v:'Elevated'},{l:'≥ 15',v:'High Risk'}] },
+    { title:'Bio Age', desc:'Biological age estimated from body composition, compared to actual chronological age.', ranges:[{l:'< Actual Age',v:'Younger than age'},{l:'= Actual Age',v:'Normal'},{l:'> Actual Age',v:'Older than age'}] },
+    { title:'Body Fat %', desc:'Percentage of total body weight that is fat mass. Optimal ranges vary by sex and age.', ranges:[{l:'< 20%',v:'Athletic (M)'},{l:'20–25%',v:'Fitness (M)'},{l:'25–30%',v:'Average (M)'},{l:'> 30%',v:'Obese (M)'}] },
+    { title:'BMR & TEE', desc:'Basal Metabolic Rate (calories at rest) and Total Energy Expenditure (daily calories burned at activity level).', ranges:[{l:'BMR',v:`${last.bmr} kcal`},{l:'TEE',v:`${last.tee} kcal`},{l:'Deficit for loss',v:`~${last.tee - 500} kcal`}] },
+  ];
+
+  document.getElementById('infoGrid').innerHTML = infoItems.map(item => `
+    <div class="info-card">
+      <h4>${item.title}</h4>
+      <p>${item.desc}</p>
+      <div class="range">${item.ranges.map(r=>`<div class="range-item"><span class="range-label">${r.l}</span><span class="range-val">${r.v}</span></div>`).join('')}</div>
+    </div>
+  `).join('');
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+initOverview();
+initCharts();
+initSegmental();
+initHistory();
+initGoals();
+</script>
+</body>
+</html>
