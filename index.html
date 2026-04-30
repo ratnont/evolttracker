@@ -1234,20 +1234,24 @@ function parseEvoltText(text) {
   const mineral = getP(2);
   const ecf    = getP(3);
 
-  // afterTee = text starting immediately AFTER the last kCal value (TEE)
-  // Slicing from the end of the match excludes the TEE number itself from the search
+  // afterTee = everything after the last kCal marker (TEE line)
+  // The segmental section can appear earlier in extracted text (PDF right-column layout),
+  // so we need patterns robust enough to skip range values like [2.73 - 3.33].
   const allKcalM = [...text.matchAll(/\d{3,4}\s*[Kk][Cc][Aa][Ll]/g)];
   const lastKcalM = allKcalM[allKcalM.length - 1];
   const afterTee = lastKcalM ? text.slice(lastKcalM.index + lastKcalM[0].length) : '';
 
-  // Bio Age: 2-digit number in range 25-55, NOT immediately followed by a decimal digit
-  // (?!\.\d) prevents "34" inside "34.28" from matching
-  const bioAgeM = afterTee.match(/\b(2[5-9]|3[0-9]|4[0-5]|5[0-5])\b(?!\.\d)/);
+  // Bio Age: 2-digit integer in range 25-55
+  // (?<!\.) — NOT preceded by "."  → skips ".33" from "3.33"
+  // (?<!\d) — NOT preceded by digit → skips digits embedded in larger numbers
+  // (?!\d)(?!\.\d) — NOT followed by digit or ".\d" → skips "35.5"-type values
+  const bioAgeM = afterTee.match(/(?<!\.)(?<!\d)(2[5-9]|3[0-9]|4[0-5]|5[0-5])(?!\d)(?!\.\d)/);
   const bioAge = bioAgeM ? parseInt(bioAgeM[1]) : null;
 
-  // BWI: X.X or X.XX decimal in range 3-12, NOT followed by " / " (which flags a segmental value)
-  // Allows both "6.6" and "6.60" PDF formats
-  const bwiM = afterTee.match(/\b([3-9]\.[0-9]{1,2})\b(?!\s*\/)/);
+  // BWI: X.X or X.XX decimal (handles both "6.6" and "6.60" PDF formats)
+  // (?<!\[) — NOT preceded by "[" → skips lower range bounds like "[7.52 - ..."
+  // (?!\s*[\/\]]) — NOT followed by "/" or "]" → skips segmental labels and upper range bounds
+  const bwiM = afterTee.match(/(?<!\[)\b([3-9]\.[0-9]{1,2})\b(?!\s*[\/\]])/);
   const bwi = bwiM ? parseFloat(bwiM[1]) : null;
 
   // Segmental (indices 7+ in rangeAll): lAL,lAF,rAL,rAF, tL,tF, lLL,lLF,rLL,rLF
