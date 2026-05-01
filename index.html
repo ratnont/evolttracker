@@ -1238,19 +1238,15 @@ function parseEvoltText(text) {
   const bioAgeLblIdx = text.search(/BIO\s*AGE/i);
   const bwiLblIdx = text.search(/BWI/i);
 
-  // Bio Age (item 16 circular gauge): the label appears far before the actual value in extracted text.
-  // The age number lives between the BIO AGE label and the BWI label (~375 chars away).
+  // Bio Age (item 16 circular gauge): the value appears at the END of a data line,
+  // immediately after the closing bracket of the reference range: "[ 65 ] 37\n"
+  // The item-17 label "\n17." was previously poisoning the match — this pattern avoids it.
   let bioAge = null;
   if (bioAgeLblIdx >= 0) {
     const bioAgeEnd = (bwiLblIdx > bioAgeLblIdx) ? bwiLblIdx : bioAgeLblIdx + 600;
     const bioAgeWindow = text.slice(bioAgeLblIdx, bioAgeEnd);
-    console.log('[DEBUG bioAge FULL WINDOW]', JSON.stringify(bioAgeWindow));
-    // Gauge value appears as a standalone 2-digit number on its own line: "\n38\n" or "\n38 ..."
-    let bioAgeM = bioAgeWindow.match(/\n(\d{2})\b(?!\.\d)/);
-    // Fallback: standalone 2-digit integer not followed by decimal/range markers
-    if (!bioAgeM) bioAgeM = bioAgeWindow.match(/\b(\d{2})\b(?!\.\d)(?!\s*[\/\[\-])/);
-    if (bioAgeM) { const n = parseInt(bioAgeM[1]); if (n >= 20 && n <= 65) bioAge = n; }
-    console.log('[DEBUG bioAge] result:', bioAge, '| matched:', bioAgeM ? bioAgeM[0] : 'none');
+    const bioAgeM = bioAgeWindow.match(/\]\s+(\d{2})\s*\n/);
+    if (bioAgeM) { const n = parseInt(bioAgeM[1]); if (n >= 18 && n <= 70) bioAge = n; }
   }
 
   // BWI Score (item 17 circular gauge): gauge renders value and denominator on separate lines — "5.7\n10".
