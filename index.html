@@ -697,7 +697,8 @@ function clearCache() {
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
   clientId: '173519284500-pvionld4ui0ctji59k2fdo7mnta5of1d.apps.googleusercontent.com',
-  folderId: '1virU29ykYT35dKHIeAPaNLGNDXi8j0hr'
+  folderId: '1virU29ykYT35dKHIeAPaNLGNDXi8j0hr',
+  ghToken:  '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'
 };
 function loadSettings() {
   try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(STORE_SETTINGS) || '{}') }; }
