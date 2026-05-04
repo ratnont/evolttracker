@@ -847,7 +847,17 @@ function initCharts() {
 
   const rk=['weight','lbm','smm','bfPct','vfa','bwi','bioAge'];
   const rl=['Weight','Lean','Muscle','Body Fat','Visc. Fat','BWI','Bio Age'];
-  const norm=(k,v)=>{const a=scans.map(s=>s[k]);const mn=Math.min(...a),mx=Math.max(...a);return mx===mn?50:+((v-mn)/(mx-mn)*100).toFixed(1);};
+  // Metrics where lower value = better outcome — invert so "better" always points outward
+  const lowerBetter = new Set(['weight','bfPct','bfm','vfa','vfl','bioAge']);
+  const norm=(k,v)=>{
+    if (v==null) return 50;
+    const a=scans.map(s=>s[k]).filter(x=>x!=null);
+    if (!a.length) return 50;
+    const mn=Math.min(...a),mx=Math.max(...a);
+    if (mx===mn) return 50;
+    const raw=(v-mn)/(mx-mn)*100;
+    return +(lowerBetter.has(k) ? 100-raw : raw).toFixed(1);
+  };
   mkChart('cRadar','radar',{labels:rl,datasets:[
     {label:fmtDate(first.date),data:rk.map(k=>norm(k,first[k])),borderColor:'rgba(239,68,68,0.8)',backgroundColor:'rgba(239,68,68,0.1)',pointRadius:3,pointBackgroundColor:'rgba(239,68,68,0.8)'},
     {label:fmtDate(last.date), data:rk.map(k=>norm(k,last[k])), borderColor:'rgba(0,212,255,0.8)',backgroundColor:'rgba(0,212,255,0.1)',pointRadius:3,pointBackgroundColor:'rgba(0,212,255,0.8)'},
