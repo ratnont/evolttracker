@@ -624,6 +624,7 @@ const HARDCODED_SCANS = [
   {date:'17-04-2026',weight:112.0,lbm:86.7,smm:48.2,bfPct:22.6,bfm:25.3,vfa:74, vfl:8, bwi:7.2,bioAge:33,bmr:2242,tee:3452,protein:53.4,mineral:4.3,tbw:63.4,icf:40.8,ecf:22.6,subFat:20.4,seg:{lAL:3.8,rAL:4.0,lLL:21.6,rLL:21.6,tL:35.7,lAF:1.2,rAF:1.2,lLF:4.6,rLF:4.6,tF:12.3}},
   {date:'22-04-2026',weight:113.0,lbm:88.1,smm:48.9,bfPct:22.0,bfm:24.9,vfa:74, vfl:8, bwi:7.2,bioAge:33,bmr:2272,tee:3498,protein:54.3,mineral:4.4,tbw:64.5,icf:41.5,ecf:23.0,subFat:20.1,seg:{lAL:3.9,rAL:4.1,lLL:22.0,rLL:22.0,tL:36.3,lAF:1.1,rAF:1.1,lLF:4.5,rLF:4.5,tF:12.0}},
   {date:'29-04-2026',weight:110.5,lbm:80.8,smm:44.6,bfPct:26.9,bfm:29.7,vfa:95, vfl:10,bwi:6.6,bioAge:35,bmr:2115,tee:3257,protein:49.8,mineral:4.0,tbw:59.1,icf:38.0,ecf:21.1,subFat:24.1,seg:{lAL:3.5,rAL:3.7,lLL:20.2,rLL:20.3,tL:33.4,lAF:1.5,rAF:1.5,lLF:5.9,rLF:5.9,tF:13.9}},
+  {date:'01-05-2026',weight:110.4,lbm:83.7,smm:46.4,bfPct:24.2,bfm:26.7,vfa:78, vfl:9, bwi:6.9,bioAge:34,bmr:2177,tee:3352,protein:17.1,mineral:6.3,tbw:60.3,icf:39.3,ecf:21.0,subFat:23.1,seg:{lAL:4.69,rAL:4.86,lLL:12.61,rLL:12.39,tL:35.43,lAF:1.85,rAF:1.62,lLF:3.97,rLF:3.72,tF:15.54}},
 ];
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
@@ -683,9 +684,13 @@ function clearCache() {
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
+const DEFAULT_SETTINGS = {
+  clientId: '173519284500-pvionld4ui0ctji59k2fdo7mnta5of1d.apps.googleusercontent.com',
+  folderId: '1virU29ykYT35dKHIeAPaNLGNDXi8j0hr'
+};
 function loadSettings() {
-  try { return JSON.parse(localStorage.getItem(STORE_SETTINGS) || '{}'); }
-  catch(e) { return {}; }
+  try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(STORE_SETTINGS) || '{}') }; }
+  catch(e) { return { ...DEFAULT_SETTINGS }; }
 }
 function saveSettings(s) {
   localStorage.setItem(STORE_SETTINGS, JSON.stringify(s));
