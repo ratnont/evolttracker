@@ -1226,22 +1226,25 @@ function parseEvoltText(text) {
   const bmr = kcals[0] ? parseInt(kcals[0][1]) : null;
   const tee = kcals[1] ? parseInt(kcals[1][1]) : null;
 
-  // All "val / High|Low|Optimal [range]" matches
-  const rangeAll = [...text.matchAll(/([\d.]+) \/ (?:High|Low|Optimal) \[/g)];
+  // All "val / High|Low|Optimal [range]" matches (body comp section only — before SEGMENTAL label)
+  const segLblIdx = text.search(/SEGMENTAL/i);
+  const bodyText = segLblIdx > 0 ? text.slice(0, segLblIdx) : text;
+  const rangeAll = [...bodyText.matchAll(/([\d.]+) \/ (?:High|Low|Optimal) \[/g)];
   const getR = i => rangeAll[i] ? parseFloat(rangeAll[i][1]) : null;
-  // Index mapping: 0=LBM, 1=BFM, 2=SMM, 3=Protein, 4=skip, 5=VFA(dup), 6=TBW
+  // Index mapping: 0=LBM, 1=BFM, 2=SMM, 3=Protein, 4=Mineral, 5=VFA, 6=TBW
   const lbm     = getR(0);
   const bfm     = getR(1);
   const smm     = getR(2);
   const protein = getR(3);
+  const mineral = getR(4);  // was "skip" — actually Mineral "6.3 / High [3.4 - 4.2]"
   const tbw     = getR(6);
 
-  // "val [ pct% ]" pattern: SubFat, ICF, Mineral, ECF
+  // "val [ pct% ]" pattern: 0=SubFat, 1=ICF, 2=ViscFatMass(unused), 3=ECF
   const pctAll = [...text.matchAll(/([\d.]+) \[ ([\d.]+)% \]/g)];
   const getP = i => pctAll[i] ? parseFloat(pctAll[i][1]) : null;
   const subFat = getP(0);
   const icf    = getP(1);
-  const mineral = getP(2);
+  // getP(2) = visceral fat mass kg — not stored separately, skipped
   const ecf    = getP(3);
 
   // Find label positions for both gauges upfront (used by both extractions)
@@ -1268,13 +1271,22 @@ function parseEvoltText(text) {
     if (bwiM) { const n = parseFloat(bwiM[1]); if (n >= 1 && n <= 10) bwi = n; }
   }
 
-  // Segmental (indices 7+ in rangeAll): lAL,lAF,rAL,rAF, tL,tF, lLL,lLF,rLL,rLF
-  const segVals = rangeAll.slice(7).map(m => parseFloat(m[1]));
+  // Segmental: anchor to SEGMENTAL label, parse its own "/ High|Low|Optimal [" matches.
+  // PDF layout left→right per row:
+  //   Arms row:  [0]lAL [1]lAF [2]rAL [3]rAF
+  //   Torso row: [4]tL  [5]tF  [6]waist-hip ratio (skip — "0.83 / Optimal [0.75 - 0.9]")
+  //   Legs row:  [7]lLL [8]lLF [9]rLL [10]rLF
   let seg = { lAL:null,rAL:null,lLL:null,rLL:null,tL:null,lAF:null,rAF:null,lLF:null,rLF:null,tF:null };
-  if (segVals.length >= 10) {
-    [seg.lAL, seg.lAF, seg.rAL, seg.rAF] = segVals.slice(0, 4);
-    [seg.tL,  seg.tF]                     = segVals.slice(4, 6);
-    [seg.lLL, seg.lLF, seg.rLL, seg.rLF]  = segVals.slice(6, 10);
+  if (segLblIdx >= 0) {
+    const segText = text.slice(segLblIdx);
+    const segM = [...segText.matchAll(/([\d.]+) \/ (?:High|Low|Optimal) \[/g)];
+    const getS = i => segM[i] ? parseFloat(segM[i][1]) : null;
+    if (segM.length >= 11) {
+      seg.lAL = getS(0); seg.lAF = getS(1); seg.rAL = getS(2); seg.rAF = getS(3);
+      seg.tL  = getS(4); seg.tF  = getS(5);
+      // getS(6) = waist-hip ratio — skip
+      seg.lLL = getS(7); seg.lLF = getS(8); seg.rLL = getS(9); seg.rLF = getS(10);
+    }
   }
 
   return { date: dateM[1], weight, lbm, bfm, smm, bfPct, vfa, vfl, bwi, bioAge, bmr, tee, protein, mineral, tbw, icf, ecf, subFat, seg };
