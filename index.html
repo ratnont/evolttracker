@@ -539,6 +539,10 @@ main { padding: 16px 16px calc(var(--nav-h) + var(--safe-b) + 16px); max-width: 
         <label>Drive Folder ID</label>
         <input id="dpFolderId" type="text" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms">
       </div>
+      <div class="dp-input-group">
+        <label>Gemini API Key <span style="color:var(--green);font-size:10px;font-weight:600">✦ AI PARSER</span></label>
+        <input id="dpGeminiKey" type="password" placeholder="AIza... (optional — smarter parsing)">
+      </div>
       <button class="dp-btn dp-btn-primary" id="dpConnectBtn" onclick="connectAndSync()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
         Connect &amp; Sync
@@ -1034,8 +1038,9 @@ function openDrivePanel() {
   document.getElementById('drivePanel').classList.add('open');
   // Pre-fill saved settings
   const s = loadSettings();
-  if (s.clientId) document.getElementById('dpClientId').value = s.clientId;
-  if (s.folderId) document.getElementById('dpFolderId').value = s.folderId;
+  if (s.clientId)   document.getElementById('dpClientId').value = s.clientId;
+  if (s.folderId)   document.getElementById('dpFolderId').value = s.folderId;
+  if (s.geminiKey)  document.getElementById('dpGeminiKey').value = s.geminiKey;
   updateDrivePanelUI();
 }
 
@@ -1116,8 +1121,9 @@ function renderFileList() {
 // ── DRIVE AUTH ────────────────────────────────────────────────────────────────
 function getTokenThen(callback) {
   const settings = {
-    clientId: document.getElementById('dpClientId').value.trim(),
-    folderId: document.getElementById('dpFolderId').value.trim(),
+    clientId:  document.getElementById('dpClientId').value.trim(),
+    folderId:  document.getElementById('dpFolderId').value.trim(),
+    geminiKey: document.getElementById('dpGeminiKey').value.trim(),
   };
   if (!settings.clientId || !settings.folderId) {
     setDpStatus('red', 'Missing credentials', '<br>Please enter both Client ID and Folder ID.');
@@ -1304,6 +1310,81 @@ function parseEvoltText(text) {
   return { date: dateM[1], weight, lbm, bfm, smm, bfPct, vfa, vfl, bwi, bioAge, bmr, tee, protein, mineral, tbw, icf, ecf, subFat, seg };
 }
 
+// ── GEMINI PDF PARSER ─────────────────────────────────────────────────────────
+async function parseWithGemini(arrayBuffer, apiKey) {
+  // Convert PDF binary to base64
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk)
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  const base64 = btoa(binary);
+
+  const prompt = `Extract all body composition values from this Evolt 360 BIA scan PDF.
+Return ONLY a valid JSON object with exactly these fields (use null if a value is not found):
+{
+  "date": "DD-MM-YYYY",
+  "weight": <total weight kg, number>,
+  "lbm": <lean body mass kg, number>,
+  "smm": <skeletal muscle mass kg, number>,
+  "bfPct": <body fat percentage as number only, no % sign>,
+  "bfm": <body fat mass kg, number>,
+  "vfa": <visceral fat area cm², integer>,
+  "vfl": <visceral fat level integer 1-20>,
+  "bwi": <BWI score out of 10, one decimal>,
+  "bioAge": <biological age years, integer>,
+  "bmr": <basal metabolic rate kcal, integer>,
+  "tee": <total energy expenditure kcal, integer>,
+  "protein": <protein kg, number>,
+  "mineral": <mineral kg, number>,
+  "tbw": <total body water litres, number>,
+  "icf": <intracellular fluid litres, number>,
+  "ecf": <extracellular fluid litres, number>,
+  "subFat": <subcutaneous fat mass kg, number>,
+  "seg": {
+    "lAL": <left arm lean kg>,
+    "lAF": <left arm fat kg>,
+    "rAL": <right arm lean kg>,
+    "rAF": <right arm fat kg>,
+    "tL":  <torso lean kg>,
+    "tF":  <torso fat kg>,
+    "lLL": <left leg lean kg>,
+    "lLF": <left leg fat kg>,
+    "rLL": <right leg lean kg>,
+    "rLF": <right leg fat kg>
+  }
+}
+Return ONLY the JSON. No markdown, no explanation.`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [
+          { text: prompt },
+          { inline_data: { mime_type: 'application/pdf', data: base64 } }
+        ]}],
+        generationConfig: { temperature: 0, responseMimeType: 'application/json' }
+      })
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Gemini error ${res.status}: ${err?.error?.message || res.statusText}`);
+  }
+
+  const result = await res.json();
+  const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Gemini returned empty response');
+
+  const scan = JSON.parse(text.replace(/```json|```/g, '').trim());
+  if (!scan.date) throw new Error('Gemini response missing date field');
+  return scan;
+}
+
 // ── SYNC ORCHESTRATION ────────────────────────────────────────────────────────
 async function doSync(settings, force = false) {
   setDpStatus('spin', 'Syncing…', '<br>Connecting to Google Drive.');
@@ -1332,8 +1413,19 @@ async function doSync(settings, force = false) {
       setDpProgress(`Parsing ${i+1} / ${total}: ${f.name}`, Math.round((i/total)*100));
       try {
         const buf = await downloadDriveFile(f.id);
-        const text = await extractPDFText(buf);
-        const scan = parseEvoltText(text);
+        let scan = null;
+        if (settings.geminiKey) {
+          try {
+            scan = await parseWithGemini(buf, settings.geminiKey);
+          } catch(e) {
+            console.warn('Gemini parse failed, falling back to regex:', e.message);
+            const text = await extractPDFText(buf);
+            scan = parseEvoltText(text);
+          }
+        } else {
+          const text = await extractPDFText(buf);
+          scan = parseEvoltText(text);
+        }
         if (scan) {
           scan.driveFileId = f.id;
           scan.fileName = f.name;
