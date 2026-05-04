@@ -543,6 +543,10 @@ main { padding: 16px 16px calc(var(--nav-h) + var(--safe-b) + 16px); max-width: 
         <label>Gemini API Key <span style="color:var(--green);font-size:10px;font-weight:600">✦ AI PARSER</span></label>
         <input id="dpGeminiKey" type="password" placeholder="AIza... (optional — smarter parsing)">
       </div>
+      <div class="dp-input-group">
+        <label>GitHub Token <span style="color:var(--blue);font-size:10px;font-weight:600">✦ AUTO BACKUP</span></label>
+        <input id="dpGhToken" type="password" placeholder="ghp_... (optional — saves data.json to repo)">
+      </div>
       <button class="dp-btn dp-btn-primary" id="dpConnectBtn" onclick="connectAndSync()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
         Connect &amp; Sync
@@ -637,6 +641,9 @@ const STORE_CACHE    = 'evolt_scan_cache';
 const DRIVE_SCOPE    = 'https://www.googleapis.com/auth/drive';
 const DRIVE_API      = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD   = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+const GITHUB_REPO    = 'ratnont/evolttracker';
+const GITHUB_FILE    = 'data.json';
+const GITHUB_API     = 'https://api.github.com';
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let scans, first, last, labels;
@@ -1041,6 +1048,7 @@ function openDrivePanel() {
   if (s.clientId)   document.getElementById('dpClientId').value = s.clientId;
   if (s.folderId)   document.getElementById('dpFolderId').value = s.folderId;
   if (s.geminiKey)  document.getElementById('dpGeminiKey').value = s.geminiKey;
+  if (s.ghToken)    document.getElementById('dpGhToken').value = s.ghToken;
   updateDrivePanelUI();
 }
 
@@ -1124,6 +1132,7 @@ function getTokenThen(callback) {
     clientId:  document.getElementById('dpClientId').value.trim(),
     folderId:  document.getElementById('dpFolderId').value.trim(),
     geminiKey: document.getElementById('dpGeminiKey').value.trim(),
+    ghToken:   document.getElementById('dpGhToken').value.trim(),
   };
   if (!settings.clientId || !settings.folderId) {
     setDpStatus('red', 'Missing credentials', '<br>Please enter both Client ID and Folder ID.');
@@ -1356,33 +1365,117 @@ Return ONLY a valid JSON object with exactly these fields (use null if a value i
 }
 Return ONLY the JSON. No markdown, no explanation.`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [
-          { text: prompt },
-          { inline_data: { mime_type: 'application/pdf', data: base64 } }
-        ]}],
-        generationConfig: { temperature: 0, responseMimeType: 'application/json' }
-      })
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { text: prompt },
+            { inline_data: { mime_type: 'application/pdf', data: base64 } }
+          ]}],
+          generationConfig: { temperature: 0, responseMimeType: 'application/json' }
+        })
+      }
+    );
+
+    // Retry on server overload or rate limit
+    if ((res.status === 503 || res.status === 429) && attempt < MAX_RETRIES) {
+      const wait = [10000, 20000, 30000][attempt]; // 10s, 20s, 30s
+      console.warn(`Gemini ${res.status} — retrying in ${wait/1000}s (attempt ${attempt+1}/${MAX_RETRIES})…`);
+      await new Promise(r => setTimeout(r, wait));
+      continue;
     }
-  );
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(`Gemini error ${res.status}: ${err?.error?.message || res.statusText}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Gemini error ${res.status}: ${err?.error?.message || res.statusText}`);
+    }
+
+    const result = await res.json();
+    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('Gemini returned empty response');
+
+    const scan = JSON.parse(text.replace(/```json|```/g, '').trim());
+    if (!scan.date) throw new Error('Gemini response missing date field');
+    return scan;
   }
+}
 
-  const result = await res.json();
-  const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Gemini returned empty response');
+// ── DRIVE JSON CACHE ──────────────────────────────────────────────────────────
+const DRIVE_CACHE_FILENAME = 'evolt-cache.json';
 
-  const scan = JSON.parse(text.replace(/```json|```/g, '').trim());
-  if (!scan.date) throw new Error('Gemini response missing date field');
-  return scan;
+async function findDriveJsonCache(folderId) {
+  const q = encodeURIComponent(`'${folderId}' in parents and name='${DRIVE_CACHE_FILENAME}' and trashed=false`);
+  const url = `${DRIVE_API}?q=${q}&fields=files(id,name)&pageSize=1`;
+  const data = await driveGet(url);
+  return (data.files && data.files[0]) || null;
+}
+
+async function downloadDriveJsonCache(fileId) {
+  const r = await fetch(`${DRIVE_API}/${fileId}?alt=media`, {
+    headers: { Authorization: 'Bearer ' + driveToken }
+  });
+  if (!r.ok) throw new Error('Drive cache download failed: ' + r.status);
+  return r.json();
+}
+
+async function saveDriveJsonCache(fileMap, folderId, existingFileId) {
+  const json = JSON.stringify({ fileMap, savedAt: new Date().toISOString() });
+  if (existingFileId) {
+    // Overwrite existing file content
+    const r = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`,
+      { method: 'PATCH', headers: { Authorization: 'Bearer ' + driveToken, 'Content-Type': 'application/json' }, body: json }
+    );
+    if (!r.ok) throw new Error('Drive cache update failed: ' + r.status);
+    return existingFileId;
+  } else {
+    // Create new file
+    const meta = { name: DRIVE_CACHE_FILENAME, parents: [folderId] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+    form.append('file', new Blob([json], { type: 'application/json' }));
+    const r = await fetch(DRIVE_UPLOAD, { method: 'POST', headers: { Authorization: 'Bearer ' + driveToken }, body: form });
+    if (!r.ok) throw new Error('Drive cache create failed: ' + r.status);
+    const result = await r.json();
+    return result.id;
+  }
+}
+
+// ── GITHUB DATA BACKUP ────────────────────────────────────────────────────────
+async function saveToGitHub(fileMap, settings) {
+  if (!settings.ghToken) return;
+  const payload = { fileMap, savedAt: new Date().toISOString() };
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+  const headers = {
+    Authorization: `Bearer ${settings.ghToken}`,
+    Accept: 'application/vnd.github.v3+json',
+    'Content-Type': 'application/json'
+  };
+  // Get current SHA (required for updates)
+  let sha = null;
+  try {
+    const r = await fetch(`${GITHUB_API}/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}`, { headers });
+    if (r.ok) { const d = await r.json(); sha = d.sha; }
+  } catch(e) { /* file doesn't exist yet — first push */ }
+
+  const body = {
+    message: `Update scan data ${new Date().toISOString().slice(0,10)}`,
+    content,
+    ...(sha ? { sha } : {})
+  };
+  const r = await fetch(`${GITHUB_API}/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}`, {
+    method: 'PUT', headers, body: JSON.stringify(body)
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(`GitHub save failed ${r.status}: ${err.message || r.statusText}`);
+  }
+  console.log('[GitHub] data.json saved —', Object.keys(fileMap).length, 'entries');
 }
 
 // ── SYNC ORCHESTRATION ────────────────────────────────────────────────────────
@@ -1394,17 +1487,50 @@ async function doSync(settings, force = false) {
     const files = await listDriveFiles(settings.folderId);
     const currentIds = new Set(files.map(f => f.id));
 
-    // Start from existing cache (or empty if force re-parse)
-    const fileMap = force ? {} : { ...cachedFileMap };
+    // ── Load starting fileMap ────────────────────────────────────────────────
+    // Priority: 1) Drive JSON cache (if force or no local cache)  2) localStorage
+    setDpProgress('Checking Drive cache…', 2);
+    const driveJsonFile = await findDriveJsonCache(settings.folderId);
+    let driveCacheId = driveJsonFile ? driveJsonFile.id : null;
+    let fileMap;
 
-    // Remove files deleted from Drive
+    if (force || Object.keys(cachedFileMap).length === 0) {
+      if (driveJsonFile) {
+        setDpProgress('Loading cached data from Drive…', 5);
+        try {
+          const cached = await downloadDriveJsonCache(driveJsonFile.id);
+          fileMap = cached.fileMap || {};
+          saveCache(fileMap);
+          refreshAll();
+          console.log('[Drive cache] Loaded', Object.keys(fileMap).length, 'entries from evolt-cache.json');
+        } catch(e) {
+          console.warn('[Drive cache] Could not load:', e.message);
+          fileMap = force ? {} : { ...cachedFileMap };
+        }
+      } else {
+        fileMap = force ? {} : { ...cachedFileMap };
+      }
+    } else {
+      fileMap = { ...cachedFileMap };
+    }
+
+    // Remove entries for files deleted from Drive
     Object.keys(fileMap).forEach(id => {
       if (!currentIds.has(id)) delete fileMap[id];
     });
 
-    // Find files not yet in cache
+    // Find PDFs not yet parsed
     const newFiles = files.filter(f => !fileMap[f.id]);
     const total = newFiles.length;
+
+    if (total === 0) {
+      setDpProgress('', -1);
+      const parsed = Object.values(fileMap).filter(v=>v&&v.date).length;
+      setDpStatus('green', 'Connected', `<br>${parsed} scans loaded from Drive cache`);
+      updateDrivePanelUI();
+      document.getElementById('dpConnectBtn').disabled = false;
+      return;
+    }
 
     setDpProgress(`Parsing ${total} new PDF${total===1?'':'s'}…`, 0);
 
@@ -1422,6 +1548,8 @@ async function doSync(settings, force = false) {
             const text = await extractPDFText(buf);
             scan = parseEvoltText(text);
           }
+          // Rate limiting: 3.5s between calls keeps us under 20 RPM free tier limit
+          if (i < newFiles.length - 1) await new Promise(r => setTimeout(r, 3500));
         } else {
           const text = await extractPDFText(buf);
           scan = parseEvoltText(text);
@@ -1439,9 +1567,26 @@ async function doSync(settings, force = false) {
       }
     }
 
-    setDpProgress('Saving…', 100);
+    // ── Save to localStorage + Drive JSON cache ──────────────────────────────
+    setDpProgress('Saving…', 98);
     saveCache(fileMap);
     refreshAll();
+
+    try {
+      setDpProgress('Saving cache to Drive…', 99);
+      driveCacheId = await saveDriveJsonCache(fileMap, settings.folderId, driveCacheId);
+      console.log('[Drive cache] Saved evolt-cache.json —', Object.keys(fileMap).length, 'entries');
+    } catch(e) {
+      console.warn('[Drive cache] Could not save:', e.message);
+    }
+
+    try {
+      setDpProgress('Saving to GitHub…', 100);
+      await saveToGitHub(fileMap, settings);
+    } catch(e) {
+      console.warn('[GitHub] Could not save data.json:', e.message);
+    }
+
     setDpProgress('', -1);
 
     const parsed = Object.values(fileMap).filter(v=>v&&v.date).length;
@@ -1559,8 +1704,23 @@ async function uploadFiles(files, settings) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-loadData();
-refreshAll();
+async function init() {
+  // Auto-load data.json from GitHub Pages (works on any device, no auth needed)
+  try {
+    const r = await fetch(`${GITHUB_FILE}?_=${Date.now()}`);
+    if (r.ok) {
+      const cached = await r.json();
+      if (cached.fileMap && Object.keys(cached.fileMap).length > 0) {
+        cachedFileMap = cached.fileMap;
+        localStorage.setItem(STORE_CACHE, JSON.stringify(cached));
+        console.log('[GitHub] Auto-loaded data.json —', Object.keys(cached.fileMap).length, 'entries');
+      }
+    }
+  } catch(e) { /* No data.json yet — use localStorage or hardcoded */ }
+  loadData();
+  refreshAll();
+}
+init();
 </script>
 </body>
 </html>
