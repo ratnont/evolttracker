@@ -705,8 +705,13 @@ const tt = { backgroundColor:'#1e2330', borderColor:'#2a2f3d', borderWidth:1, pa
 const isDesktop = () => window.innerWidth >= 900;
 
 function mkChart(id, type, data, options) {
-  if (chartRegistry.has(id)) { try { chartRegistry.get(id).destroy(); } catch(e){} }
-  const c = new Chart(document.getElementById(id), {type, data, options});
+  // Destroy old instance if any
+  if (chartRegistry.has(id)) { try { chartRegistry.get(id).destroy(); } catch(e){} chartRegistry.delete(id); }
+  // Replace canvas to guarantee a clean state (destroy() alone can leave stale event listeners)
+  const old = document.getElementById(id);
+  const fresh = old.cloneNode(false);
+  old.parentNode.replaceChild(fresh, old);
+  const c = new Chart(fresh, {type, data, options});
   chartRegistry.set(id, c);
   return c;
 }
@@ -860,7 +865,9 @@ function initCharts() {
     if (!a.length) return 50;
     const mn=Math.min(...a),mx=Math.max(...a);
     if (mx===mn) return 50;
-    const raw=(v-mn)/(mx-mn)*100;
+    // Pad 30% outside actual range so neither first nor latest sits at 0 or 100
+    const pad=(mx-mn)*0.3;
+    const raw=Math.max(0,Math.min(100,(v-(mn-pad))/((mx+pad)-(mn-pad))*100));
     return +(lowerBetter.has(k) ? 100-raw : raw).toFixed(1);
   };
   mkChart('cRadar','radar',{labels:rl,datasets:[
