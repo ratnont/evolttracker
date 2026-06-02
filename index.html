@@ -1909,6 +1909,21 @@ function loadImg(src) {
 }
 const CHART_TITLES = { cov1:'WEIGHT & BODY FAT', cov2:'LEAN & MUSCLE', cov3:'BWI & BIO AGE', cov4:'VISCERAL FAT' };
 
+function renderChartForStory(chartId, w, h) {
+  const src = chartRegistry.get(chartId);
+  if (!src) return null;
+  const tmp = document.createElement('canvas');
+  tmp.width = w; tmp.height = h;
+  const t = new Chart(tmp, {
+    type: src.config.type,
+    data: src.config.data,
+    options: { ...src.config.options, responsive: false, animation: false }
+  });
+  const url = tmp.toDataURL('image/png');
+  t.destroy();
+  return url;
+}
+
 async function generateStoryImage(opts) {
   const W = 1080, H = 1920;
   const cv = document.createElement('canvas');
@@ -1977,10 +1992,14 @@ async function generateStoryImage(opts) {
     c.font = f(28,true); c.fillStyle = '#00d4ff';
     c.letterSpacing = '3px'; c.fillText(CHART_TITLES[opts.chart]||'CHART', W/2, cy+52); c.letterSpacing = '0px';
     cy += 72;
-    c.fillStyle = '#161921'; c.beginPath(); c.roundRect(ML, cy, W-ML*2, 400, 16); c.fill();
-    const chartImg = await loadImg(chartRegistry.get(opts.chart).toBase64Image('image/png', 1));
-    c.drawImage(chartImg, ML+10, cy+10, W-ML*2-20, 380);
-    cy += 420; c.textAlign = 'center';
+    const chartAreaW = W - ML*2 - 20, chartAreaH = 380;
+    c.fillStyle = '#161921'; c.beginPath(); c.roundRect(ML, cy, W-ML*2, chartAreaH+20, 16); c.fill();
+    const chartUrl = renderChartForStory(opts.chart, chartAreaW, chartAreaH);
+    if (chartUrl) {
+      const chartImg = await loadImg(chartUrl);
+      c.drawImage(chartImg, ML+10, cy+10, chartAreaW, chartAreaH);
+    }
+    cy += chartAreaH + 30; c.textAlign = 'center';
   }
 
   // ── PROGRESS ──
