@@ -277,6 +277,44 @@ main { padding: 16px 16px calc(var(--nav-h) + var(--safe-b) + 16px); max-width: 
 .dp-upload-zone strong { color: var(--accent); }
 #dp-file-input { display: none; }
 
+/* ── SHARE STORY ─────────────────────────────────────────────────────────── */
+.share-story-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 11px; margin-bottom: 4px;
+  background: linear-gradient(135deg, rgba(124,58,237,0.1), rgba(0,212,255,0.1));
+  border: 1px solid rgba(0,212,255,0.25); border-radius: var(--r);
+  color: var(--accent); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+}
+.share-story-btn:hover { background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(0,212,255,0.2)); border-color: var(--accent); }
+.share-modal-overlay {
+  position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.8);
+  display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.share-modal-overlay.open { display: flex; }
+.share-modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; width: 100%; max-width: 360px; padding: 20px;
+}
+.share-modal-head {
+  font-size: 16px; font-weight: 700; margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.share-modal-close {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--muted); font-size: 14px;
+}
+.share-preview-wrap {
+  background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 14px;
+  max-height: 55dvh; display: flex; align-items: center; justify-content: center;
+}
+.share-preview-wrap img { height: 100%; max-height: 55dvh; width: auto; display: block; }
+.share-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.share-act-btn { padding: 12px; border: none; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.share-dl-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+.share-dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+.share-sh-btn { background: linear-gradient(135deg, var(--accent2), var(--accent)); color: #fff; }
+
 /* ── DESKTOP OVERRIDES (≥900px) ───────────────────────────────────────────── */
 @media (min-width: 900px) {
   nav {
@@ -395,6 +433,11 @@ main { padding: 16px 16px calc(var(--nav-h) + var(--safe-b) + 16px); max-width: 
     <div class="hero-pills" id="h-pills"></div>
   </div>
 
+  <button class="share-story-btn" onclick="openShareModal()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+    Share Progress to Story
+  </button>
+
   <p class="section-label">Latest Scan — <span id="latestLabel"></span></p>
   <div class="metrics-grid" id="metricsGrid"></div>
 
@@ -500,6 +543,23 @@ main { padding: 16px 16px calc(var(--nav-h) + var(--safe-b) + 16px); max-width: 
 </div>
 
 </main>
+
+<!-- ── SHARE STORY MODAL ──────────────────────────────────────────────────── -->
+<div class="share-modal-overlay" id="shareOverlay" onclick="if(event.target===this)closeShareModal()">
+  <div class="share-modal">
+    <div class="share-modal-head">
+      Share to Story
+      <button class="share-modal-close" onclick="closeShareModal()">✕</button>
+    </div>
+    <div class="share-preview-wrap">
+      <img id="shareImg" src="" alt="Story card">
+    </div>
+    <div class="share-actions">
+      <button class="share-act-btn share-dl-btn" onclick="downloadStory()">⬇ Download</button>
+      <button class="share-act-btn share-sh-btn" onclick="nativeShare()">↗ Share</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── DRIVE PANEL ────────────────────────────────────────────────────────── -->
 <div class="drive-overlay" id="driveOverlay" onclick="closeDrivePanel()"></div>
@@ -1702,6 +1762,150 @@ async function uploadFiles(files, settings) {
   await doSync(settings);
   setDpProgress('', -1);
   document.getElementById('dpConnectBtn').disabled = false;
+}
+
+// ── SHARE STORY ───────────────────────────────────────────────────────────────
+let _storyUrl = null;
+
+function openShareModal() {
+  _storyUrl = generateStoryImage();
+  document.getElementById('shareImg').src = _storyUrl;
+  document.getElementById('shareOverlay').classList.add('open');
+}
+function closeShareModal() {
+  document.getElementById('shareOverlay').classList.remove('open');
+}
+function downloadStory() {
+  const a = document.createElement('a');
+  a.href = _storyUrl;
+  a.download = `evolt-${last.date}.png`;
+  a.click();
+}
+async function nativeShare() {
+  if (!navigator.share) { downloadStory(); return; }
+  try {
+    const blob = await (await fetch(_storyUrl)).blob();
+    const file = new File([blob], `evolt-${last.date}.png`, { type: 'image/png' });
+    await navigator.share({ files: [file], title: 'My Evolt 360 Progress' });
+  } catch(e) { if (e.name !== 'AbortError') downloadStory(); }
+}
+
+function generateStoryImage() {
+  const W = 1080, H = 1920;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const c = cv.getContext('2d');
+  const SF = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  const f = (sz, bold) => `${bold ? 'bold ' : ''}${sz}px ${SF}`;
+
+  // Background
+  const bg = c.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#0c1a28'); bg.addColorStop(0.55, '#0d0f14'); bg.addColorStop(1, '#160d2a');
+  c.fillStyle = bg; c.fillRect(0, 0, W, H);
+
+  // Top accent bar
+  const bar = c.createLinearGradient(0, 0, W, 0);
+  bar.addColorStop(0, '#00d4ff'); bar.addColorStop(1, '#7c3aed');
+  c.fillStyle = bar; c.fillRect(0, 0, W, 10);
+
+  // Header
+  c.textAlign = 'center';
+  c.font = f(34, false); c.fillStyle = '#64748b';
+  c.fillText(fmtDate(last.date), W/2, 118);
+
+  const divLine = y => {
+    c.strokeStyle = '#2a2f3d'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(80, y); c.lineTo(W-80, y); c.stroke();
+  };
+  divLine(205);
+
+  // Latest scan heading
+  c.font = f(28, true); c.fillStyle = '#00d4ff';
+  c.letterSpacing = '3px'; c.textAlign = 'center';
+  c.fillText('LATEST SCAN', W/2, 258); c.letterSpacing = '0px';
+
+  // Metrics grid (2×4)
+  const ML = 72, CG = 22, RG = 18;
+  const CW = (W - ML*2 - CG) / 2, CH = 188, GY = 284;
+  [
+    ['Weight',    last.weight.toFixed(1), 'kg',  '#00d4ff'],
+    ['Body Fat',  last.bfPct.toFixed(1),  '%',   '#ef4444'],
+    ['Fat Mass',  last.bfm.toFixed(1),    'kg',  '#f59e0b'],
+    ['Lean Mass', last.lbm.toFixed(1),    'kg',  '#10b981'],
+    ['Muscle',    last.smm.toFixed(1),    'kg',  '#7c3aed'],
+    ['Visc. Fat', String(last.vfa),       'cm²', '#ef4444'],
+    ['BWI Score', last.bwi.toFixed(1),    '',    '#00d4ff'],
+    ['Bio Age',   String(last.bioAge),    'yrs', '#10b981'],
+  ].forEach(([lbl, val, unit, col], i) => {
+    const cx = ML + (i%2) * (CW+CG);
+    const cy = GY + Math.floor(i/2) * (CH+RG);
+    c.fillStyle = '#161921';
+    c.beginPath(); c.roundRect(cx, cy, CW, CH, 16); c.fill();
+    c.fillStyle = col;
+    c.beginPath(); c.roundRect(cx, cy, 6, CH, [16,0,0,16]); c.fill();
+    c.textAlign = 'left';
+    c.font = f(24, false); c.fillStyle = '#64748b';
+    c.fillText(lbl.toUpperCase(), cx+28, cy+48);
+    c.font = f(70, true); c.fillStyle = '#e2e8f0';
+    c.fillText(val, cx+28, cy+145);
+    if (unit) {
+      const vw = c.measureText(val).width;
+      c.font = f(28, false); c.fillStyle = '#64748b';
+      c.fillText(unit, cx+28+vw+8, cy+145);
+    }
+  });
+
+  // afterGrid = GY + 4*CH + 3*RG = 284+752+54 = 1090
+  const AG = GY + 4*CH + 3*RG;
+
+  // Progress section (first)
+  const PDY = AG + 44; divLine(PDY);
+  c.textAlign = 'center'; c.font = f(28, true); c.fillStyle = '#10b981';
+  c.letterSpacing = '3px'; c.fillText('PROGRESS', W/2, PDY+56); c.letterSpacing = '0px';
+  const PSY = PDY + 74;
+  const HCH = 128, HRG = 16;
+  const smmD = last.smm - first.smm, bwiD = last.bwi - first.bwi;
+  [
+    ['Muscle',    `${smmD>=0?'+':''}${smmD.toFixed(1)}`, 'kg',  '#7c3aed'],
+    ['Visc. Fat', `-${first.vfa-last.vfa}`,              'cm²', '#ef4444'],
+    ['Bio Age',   `-${first.bioAge-last.bioAge}`,        'yrs', '#10b981'],
+    ['BWI Score', `${bwiD>=0?'+':''}${bwiD.toFixed(1)}`, '',   '#00d4ff'],
+  ].forEach(([lbl, val, unit, col], i) => {
+    const hx = ML + (i%2)*(CW+CG);
+    const hy = PSY + Math.floor(i/2)*(HCH+HRG);
+    c.fillStyle = '#161921';
+    c.beginPath(); c.roundRect(hx, hy, CW, HCH, 14); c.fill();
+    c.fillStyle = col;
+    c.beginPath(); c.roundRect(hx, hy, 6, HCH, [14,0,0,14]); c.fill();
+    c.textAlign = 'left';
+    c.font = f(22, false); c.fillStyle = '#64748b'; c.fillText(lbl.toUpperCase(), hx+26, hy+36);
+    c.font = f(52, true); c.fillStyle = '#e2e8f0'; c.fillText(val, hx+26, hy+102);
+    if (unit) {
+      const vw = c.measureText(val).width;
+      c.font = f(24, false); c.fillStyle = '#64748b'; c.fillText(unit, hx+26+vw+6, hy+102);
+    }
+  });
+
+  // My Journey section (second) — PSY + 2 rows of cards
+  const JDY = PSY + 2*HCH + HRG + 40; divLine(JDY);
+  c.textAlign = 'center'; c.font = f(28, true); c.fillStyle = '#7c3aed';
+  c.letterSpacing = '3px'; c.fillText('MY JOURNEY', W/2, JDY+56); c.letterSpacing = '0px';
+  // SSY: stat labels start 60px below heading baseline (was 20px — fixed)
+  const SSY = JDY + 116;
+  [
+    ['Weight Lost', `-${(first.weight-last.weight).toFixed(1)} kg`],
+    ['Body Fat',    `-${(first.bfPct-last.bfPct).toFixed(1)}%`],
+    ['Days',        String(daysBetween(first.date,last.date))],
+  ].forEach(([top, val], i) => {
+    const sx = 80 + i*(W-160)/3 + (W-160)/6;
+    c.font = f(23, false); c.fillStyle = '#64748b'; c.fillText(top.toUpperCase(), sx, SSY);
+    c.font = f(58, true); c.fillStyle = '#e2e8f0'; c.fillText(val, sx, SSY+76);
+  });
+  c.font = f(27, false); c.fillStyle = '#64748b';
+  c.fillText(`${fmtDate(first.date)}  →  ${fmtDate(last.date)}`, W/2, SSY+132);
+
+
+  return cv.toDataURL('image/png');
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
