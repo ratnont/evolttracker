@@ -863,8 +863,8 @@ function lineOpts(y1lbl, y2lbl) {
     interaction:{mode:'index',intersect:false},
     plugins:{legend:{labels:{font:cf,boxWidth:10,padding:10}},tooltip:tt},
     scales:{
-      x:{grid:{color:'#1a1f2e'},ticks:{font:cf,maxRotation:40,maxTicksLimit:isDesktop()?14:8}},
-      y:{grid:{color:'#1a1f2e'},ticks:{font:cf},title:{display:!!y1lbl,text:y1lbl,font:{...cf,size:10}}}
+      x:{grid:{color:'#1a1f2e'},ticks:{font:cf,maxRotation:isDesktop()?40:30,maxTicksLimit:isDesktop()?14:5}},
+      y:{grid:{color:'#1a1f2e'},ticks:{font:cf},title:{display:isDesktop()&&!!y1lbl,text:y1lbl,font:{...cf,size:10}}}
     }
   };
   if (y2lbl) o.scales.y2={position:'right',grid:{drawOnChartArea:false},ticks:{font:cf},title:{display:true,text:y2lbl,font:{...cf,size:10}}};
@@ -873,7 +873,7 @@ function lineOpts(y1lbl, y2lbl) {
 
 function ds(label,data,color,yId,fill=false) {
   return {label,data,borderColor:color,backgroundColor:fill?color.replace('rgb(','rgba(').replace(')',',0.12)'):color,
-    borderWidth:2,pointRadius:isDesktop()?4:3,pointHoverRadius:6,tension:0.35,fill,yAxisID:yId||'y'};
+    borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:0.35,fill,yAxisID:yId||'y'};
 }
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
