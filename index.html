@@ -294,7 +294,37 @@ main { padding: 16px 16px calc(var(--nav-h) + var(--safe-b) + 16px); max-width: 
 .share-modal {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 16px; width: 100%; max-width: 360px; padding: 20px;
+  max-height: 92dvh; overflow-y: auto;
 }
+.share-cust-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 0; cursor: pointer; font-size: 12px; font-weight: 600;
+  color: var(--muted); border-top: 1px solid var(--border); margin-top: 14px;
+  user-select: none; transition: color 0.15s;
+}
+.share-cust-toggle:hover { color: var(--text); }
+.share-cust-toggle svg { transition: transform 0.2s; flex-shrink: 0; }
+.share-cust-toggle.open { color: var(--accent); border-color: rgba(0,212,255,0.3); }
+.share-cust-toggle.open svg { transform: rotate(180deg); }
+.share-opts-panel { display: none; padding: 12px 0 4px; }
+.share-opts-panel.open { display: block; }
+.share-opts-group { margin-bottom: 14px; }
+.share-opts-group.dimmed { opacity: 0.35; pointer-events: none; }
+.share-opts-lbl { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 7px; }
+.share-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.share-chip {
+  padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; cursor: pointer;
+  background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+  transition: all 0.15s; user-select: none;
+}
+.share-chip.active { background: rgba(0,212,255,0.12); border-color: var(--accent); color: var(--accent); }
+.share-chip.chart-active { background: rgba(124,58,237,0.12); border-color: var(--accent2); color: var(--accent2); }
+.share-reset-btn {
+  width: 100%; padding: 8px; border: 1px dashed var(--border); border-radius: 8px;
+  background: none; color: var(--muted); font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s; margin-top: 2px;
+}
+.share-reset-btn:hover { border-color: var(--muted); color: var(--text); }
 .share-modal-head {
   font-size: 16px; font-weight: 700; margin-bottom: 14px;
   display: flex; align-items: center; justify-content: space-between;
@@ -553,6 +583,45 @@ main { padding: 16px 16px calc(var(--nav-h) + var(--safe-b) + 16px); max-width: 
     </div>
     <div class="share-preview-wrap">
       <img id="shareImg" src="" alt="Story card">
+    </div>
+    <!-- Customize panel -->
+    <div class="share-cust-toggle" id="shareOptsToggle" onclick="toggleShareOpts()">
+      <span>Customize</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="share-opts-panel" id="shareOptsPanel">
+      <div class="share-opts-group">
+        <div class="share-opts-lbl">Sections</div>
+        <div class="share-chips">
+          <span class="share-chip active" data-sec="latestScan" onclick="toggleShareSection(this)">Latest Scan</span>
+          <span class="share-chip active" data-sec="progress" onclick="toggleShareSection(this)">Progress</span>
+          <span class="share-chip active" data-sec="journey" onclick="toggleShareSection(this)">My Journey</span>
+        </div>
+      </div>
+      <div class="share-opts-group" id="shareMetricsGroup">
+        <div class="share-opts-lbl">Metrics</div>
+        <div class="share-chips">
+          <span class="share-chip active" data-met="weight" onclick="toggleShareMetric(this)">Weight</span>
+          <span class="share-chip active" data-met="bfPct" onclick="toggleShareMetric(this)">Body Fat</span>
+          <span class="share-chip active" data-met="bfm" onclick="toggleShareMetric(this)">Fat Mass</span>
+          <span class="share-chip active" data-met="lbm" onclick="toggleShareMetric(this)">Lean Mass</span>
+          <span class="share-chip active" data-met="smm" onclick="toggleShareMetric(this)">Muscle</span>
+          <span class="share-chip active" data-met="vfa" onclick="toggleShareMetric(this)">Visc. Fat</span>
+          <span class="share-chip active" data-met="bwi" onclick="toggleShareMetric(this)">BWI</span>
+          <span class="share-chip active" data-met="bioAge" onclick="toggleShareMetric(this)">Bio Age</span>
+        </div>
+      </div>
+      <div class="share-opts-group">
+        <div class="share-opts-lbl">Chart</div>
+        <div class="share-chips">
+          <span class="share-chip chart-active" data-chart="none" onclick="setShareChart(this)">None</span>
+          <span class="share-chip" data-chart="cov1" onclick="setShareChart(this)">Weight & BF%</span>
+          <span class="share-chip" data-chart="cov2" onclick="setShareChart(this)">Lean & Muscle</span>
+          <span class="share-chip" data-chart="cov3" onclick="setShareChart(this)">BWI & Age</span>
+          <span class="share-chip" data-chart="cov4" onclick="setShareChart(this)">Visc. Fat</span>
+        </div>
+      </div>
+      <button class="share-reset-btn" onclick="resetShareOpts()">↺ Reset to Default</button>
     </div>
     <div class="share-actions">
       <button class="share-act-btn share-dl-btn" onclick="downloadStory()">⬇ Download</button>
@@ -1765,10 +1834,55 @@ async function uploadFiles(files, settings) {
 }
 
 // ── SHARE STORY ───────────────────────────────────────────────────────────────
+const _defaultOpts = { sections: ['latestScan','progress','journey'], metrics: ['weight','bfPct','bfm','lbm','smm','vfa','bwi','bioAge'], chart: 'none' };
+let _opts = JSON.parse(JSON.stringify(_defaultOpts));
 let _storyUrl = null;
+let _regenTimer = null;
 
-function openShareModal() {
-  _storyUrl = generateStoryImage();
+function toggleShareOpts() {
+  document.getElementById('shareOptsToggle').classList.toggle('open');
+  document.getElementById('shareOptsPanel').classList.toggle('open');
+}
+function toggleShareSection(el) {
+  el.classList.toggle('active');
+  const sec = el.dataset.sec;
+  const idx = _opts.sections.indexOf(sec);
+  if (idx >= 0) _opts.sections.splice(idx, 1); else _opts.sections.push(sec);
+  if (sec === 'latestScan')
+    document.getElementById('shareMetricsGroup').classList.toggle('dimmed', !_opts.sections.includes('latestScan'));
+  scheduleRegen();
+}
+function toggleShareMetric(el) {
+  el.classList.toggle('active');
+  const met = el.dataset.met;
+  const idx = _opts.metrics.indexOf(met);
+  if (idx >= 0) _opts.metrics.splice(idx, 1); else _opts.metrics.push(met);
+  scheduleRegen();
+}
+function setShareChart(el) {
+  _opts.chart = el.dataset.chart;
+  document.querySelectorAll('[data-chart]').forEach(c => c.classList.remove('chart-active'));
+  el.classList.add('chart-active');
+  scheduleRegen();
+}
+function resetShareOpts() {
+  _opts = JSON.parse(JSON.stringify(_defaultOpts));
+  document.querySelectorAll('[data-sec]').forEach(el => el.classList.toggle('active', _opts.sections.includes(el.dataset.sec)));
+  document.querySelectorAll('[data-met]').forEach(el => el.classList.toggle('active', _opts.metrics.includes(el.dataset.met)));
+  document.querySelectorAll('[data-chart]').forEach(el => el.classList.toggle('chart-active', el.dataset.chart === _opts.chart));
+  document.getElementById('shareMetricsGroup').classList.remove('dimmed');
+  scheduleRegen();
+}
+function scheduleRegen() {
+  clearTimeout(_regenTimer);
+  _regenTimer = setTimeout(async () => {
+    _storyUrl = await generateStoryImage(_opts);
+    document.getElementById('shareImg').src = _storyUrl;
+  }, 350);
+}
+
+async function openShareModal() {
+  _storyUrl = await generateStoryImage(_opts);
   document.getElementById('shareImg').src = _storyUrl;
   document.getElementById('shareOverlay').classList.add('open');
 }
@@ -1790,7 +1904,12 @@ async function nativeShare() {
   } catch(e) { if (e.name !== 'AbortError') downloadStory(); }
 }
 
-function generateStoryImage() {
+function loadImg(src) {
+  return new Promise(resolve => { const i = new Image(); i.onload = () => resolve(i); i.src = src; });
+}
+const CHART_TITLES = { cov1:'WEIGHT & BODY FAT', cov2:'LEAN & MUSCLE', cov3:'BWI & BIO AGE', cov4:'VISCERAL FAT' };
+
+async function generateStoryImage(opts) {
   const W = 1080, H = 1920;
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
@@ -1808,102 +1927,105 @@ function generateStoryImage() {
   bar.addColorStop(0, '#00d4ff'); bar.addColorStop(1, '#7c3aed');
   c.fillStyle = bar; c.fillRect(0, 0, W, 10);
 
-  // Header
-  c.textAlign = 'center';
-  c.font = f(34, false); c.fillStyle = '#64748b';
-  c.fillText(fmtDate(last.date), W/2, 118);
-
   const divLine = y => {
     c.strokeStyle = '#2a2f3d'; c.lineWidth = 2;
     c.beginPath(); c.moveTo(80, y); c.lineTo(W-80, y); c.stroke();
   };
-  divLine(205);
+  const ML = 72, CG = 22;
+  const CW = (W - ML*2 - CG) / 2;
 
-  // Latest scan heading
-  c.font = f(28, true); c.fillStyle = '#00d4ff';
-  c.letterSpacing = '3px'; c.textAlign = 'center';
-  c.fillText('LATEST SCAN', W/2, 258); c.letterSpacing = '0px';
+  // Date header
+  c.textAlign = 'center';
+  c.font = f(34, false); c.fillStyle = '#64748b';
+  c.fillText(fmtDate(last.date), W/2, 90);
+  let cy = 130;
 
-  // Metrics grid (2×4)
-  const ML = 72, CG = 22, RG = 18;
-  const CW = (W - ML*2 - CG) / 2, CH = 188, GY = 284;
-  [
-    ['Weight',    last.weight.toFixed(1), 'kg',  '#00d4ff'],
-    ['Body Fat',  last.bfPct.toFixed(1),  '%',   '#ef4444'],
-    ['Fat Mass',  last.bfm.toFixed(1),    'kg',  '#f59e0b'],
-    ['Lean Mass', last.lbm.toFixed(1),    'kg',  '#10b981'],
-    ['Muscle',    last.smm.toFixed(1),    'kg',  '#7c3aed'],
-    ['Visc. Fat', String(last.vfa),       'cm²', '#ef4444'],
-    ['BWI Score', last.bwi.toFixed(1),    '',    '#00d4ff'],
-    ['Bio Age',   String(last.bioAge),    'yrs', '#10b981'],
-  ].forEach(([lbl, val, unit, col], i) => {
-    const cx = ML + (i%2) * (CW+CG);
-    const cy = GY + Math.floor(i/2) * (CH+RG);
-    c.fillStyle = '#161921';
-    c.beginPath(); c.roundRect(cx, cy, CW, CH, 16); c.fill();
-    c.fillStyle = col;
-    c.beginPath(); c.roundRect(cx, cy, 6, CH, [16,0,0,16]); c.fill();
-    c.textAlign = 'left';
-    c.font = f(24, false); c.fillStyle = '#64748b';
-    c.fillText(lbl.toUpperCase(), cx+28, cy+48);
-    c.font = f(70, true); c.fillStyle = '#e2e8f0';
-    c.fillText(val, cx+28, cy+145);
-    if (unit) {
-      const vw = c.measureText(val).width;
-      c.font = f(28, false); c.fillStyle = '#64748b';
-      c.fillText(unit, cx+28+vw+8, cy+145);
-    }
-  });
+  // ── LATEST SCAN ──
+  if (opts.sections.includes('latestScan') && opts.metrics.length > 0) {
+    divLine(cy); cy += 10;
+    c.font = f(28, true); c.fillStyle = '#00d4ff';
+    c.letterSpacing = '3px'; c.fillText('LATEST SCAN', W/2, cy+56); c.letterSpacing = '0px';
+    cy += 76;
+    const CH = 188, RG = 18;
+    const allM = [
+      ['weight','Weight',    last.weight.toFixed(1),'kg', '#00d4ff'],
+      ['bfPct', 'Body Fat',  last.bfPct.toFixed(1), '%',  '#ef4444'],
+      ['bfm',   'Fat Mass',  last.bfm.toFixed(1),   'kg', '#f59e0b'],
+      ['lbm',   'Lean Mass', last.lbm.toFixed(1),   'kg', '#10b981'],
+      ['smm',   'Muscle',    last.smm.toFixed(1),   'kg', '#7c3aed'],
+      ['vfa',   'Visc. Fat', String(last.vfa),      'cm²','#ef4444'],
+      ['bwi',   'BWI Score', last.bwi.toFixed(1),   '',   '#00d4ff'],
+      ['bioAge','Bio Age',   String(last.bioAge),   'yrs','#10b981'],
+    ];
+    const sel = allM.filter(([k]) => opts.metrics.includes(k));
+    sel.forEach(([,lbl,val,unit,col], i) => {
+      const mx = ML + (i%2)*(CW+CG), my = cy + Math.floor(i/2)*(CH+RG);
+      c.fillStyle = '#161921'; c.beginPath(); c.roundRect(mx,my,CW,CH,16); c.fill();
+      c.fillStyle = col; c.beginPath(); c.roundRect(mx,my,6,CH,[16,0,0,16]); c.fill();
+      c.textAlign = 'left';
+      c.font = f(24,false); c.fillStyle = '#64748b'; c.fillText(lbl.toUpperCase(), mx+28, my+48);
+      c.font = f(70,true);  c.fillStyle = '#e2e8f0'; c.fillText(val, mx+28, my+145);
+      if (unit) { const vw = c.measureText(val).width; c.font = f(28,false); c.fillStyle = '#64748b'; c.fillText(unit, mx+28+vw+8, my+145); }
+    });
+    cy += Math.ceil(sel.length/2)*(CH+RG) - RG + 20;
+    c.textAlign = 'center';
+  }
 
-  // afterGrid = GY + 4*CH + 3*RG = 284+752+54 = 1090
-  const AG = GY + 4*CH + 3*RG;
+  // ── CHART ──
+  if (opts.chart && opts.chart !== 'none' && chartRegistry.has(opts.chart)) {
+    divLine(cy); cy += 10;
+    c.font = f(28,true); c.fillStyle = '#00d4ff';
+    c.letterSpacing = '3px'; c.fillText(CHART_TITLES[opts.chart]||'CHART', W/2, cy+52); c.letterSpacing = '0px';
+    cy += 72;
+    c.fillStyle = '#161921'; c.beginPath(); c.roundRect(ML, cy, W-ML*2, 400, 16); c.fill();
+    const chartImg = await loadImg(chartRegistry.get(opts.chart).toBase64Image('image/png', 1));
+    c.drawImage(chartImg, ML+10, cy+10, W-ML*2-20, 380);
+    cy += 420; c.textAlign = 'center';
+  }
 
-  // Progress section (first)
-  const PDY = AG + 44; divLine(PDY);
-  c.textAlign = 'center'; c.font = f(28, true); c.fillStyle = '#10b981';
-  c.letterSpacing = '3px'; c.fillText('PROGRESS', W/2, PDY+56); c.letterSpacing = '0px';
-  const PSY = PDY + 74;
-  const HCH = 128, HRG = 16;
-  const smmD = last.smm - first.smm, bwiD = last.bwi - first.bwi;
-  [
-    ['Muscle',    `${smmD>=0?'+':''}${smmD.toFixed(1)}`, 'kg',  '#7c3aed'],
-    ['Visc. Fat', `-${first.vfa-last.vfa}`,              'cm²', '#ef4444'],
-    ['Bio Age',   `-${first.bioAge-last.bioAge}`,        'yrs', '#10b981'],
-    ['BWI Score', `${bwiD>=0?'+':''}${bwiD.toFixed(1)}`, '',   '#00d4ff'],
-  ].forEach(([lbl, val, unit, col], i) => {
-    const hx = ML + (i%2)*(CW+CG);
-    const hy = PSY + Math.floor(i/2)*(HCH+HRG);
-    c.fillStyle = '#161921';
-    c.beginPath(); c.roundRect(hx, hy, CW, HCH, 14); c.fill();
-    c.fillStyle = col;
-    c.beginPath(); c.roundRect(hx, hy, 6, HCH, [14,0,0,14]); c.fill();
-    c.textAlign = 'left';
-    c.font = f(22, false); c.fillStyle = '#64748b'; c.fillText(lbl.toUpperCase(), hx+26, hy+36);
-    c.font = f(52, true); c.fillStyle = '#e2e8f0'; c.fillText(val, hx+26, hy+102);
-    if (unit) {
-      const vw = c.measureText(val).width;
-      c.font = f(24, false); c.fillStyle = '#64748b'; c.fillText(unit, hx+26+vw+6, hy+102);
-    }
-  });
+  // ── PROGRESS ──
+  if (opts.sections.includes('progress')) {
+    divLine(cy); cy += 10;
+    c.font = f(28,true); c.fillStyle = '#10b981';
+    c.letterSpacing = '3px'; c.fillText('PROGRESS', W/2, cy+56); c.letterSpacing = '0px';
+    cy += 74;
+    const HCH = 128, HRG = 16;
+    const smmD = last.smm-first.smm, bwiD = last.bwi-first.bwi;
+    [
+      ['Muscle',   `${smmD>=0?'+':''}${smmD.toFixed(1)}`,'kg', '#7c3aed'],
+      ['Visc. Fat',`-${first.vfa-last.vfa}`,             'cm²','#ef4444'],
+      ['Bio Age',  `-${first.bioAge-last.bioAge}`,        'yrs','#10b981'],
+      ['BWI Score',`${bwiD>=0?'+':''}${bwiD.toFixed(1)}`,'',   '#00d4ff'],
+    ].forEach(([lbl,val,unit,col], i) => {
+      const hx = ML+(i%2)*(CW+CG), hy = cy+Math.floor(i/2)*(HCH+HRG);
+      c.fillStyle = '#161921'; c.beginPath(); c.roundRect(hx,hy,CW,HCH,14); c.fill();
+      c.fillStyle = col; c.beginPath(); c.roundRect(hx,hy,6,HCH,[14,0,0,14]); c.fill();
+      c.textAlign = 'left';
+      c.font = f(22,false); c.fillStyle = '#64748b'; c.fillText(lbl.toUpperCase(), hx+26, hy+36);
+      c.font = f(52,true);  c.fillStyle = '#e2e8f0'; c.fillText(val, hx+26, hy+102);
+      if (unit) { const vw = c.measureText(val).width; c.font = f(24,false); c.fillStyle = '#64748b'; c.fillText(unit, hx+26+vw+6, hy+102); }
+    });
+    cy += 2*(HCH+HRG) - HRG + 20; c.textAlign = 'center';
+  }
 
-  // My Journey section (second) — PSY + 2 rows of cards
-  const JDY = PSY + 2*HCH + HRG + 40; divLine(JDY);
-  c.textAlign = 'center'; c.font = f(28, true); c.fillStyle = '#7c3aed';
-  c.letterSpacing = '3px'; c.fillText('MY JOURNEY', W/2, JDY+56); c.letterSpacing = '0px';
-  // SSY: stat labels start 60px below heading baseline (was 20px — fixed)
-  const SSY = JDY + 116;
-  [
-    ['Weight Lost', `-${(first.weight-last.weight).toFixed(1)} kg`],
-    ['Body Fat',    `-${(first.bfPct-last.bfPct).toFixed(1)}%`],
-    ['Days',        String(daysBetween(first.date,last.date))],
-  ].forEach(([top, val], i) => {
-    const sx = 80 + i*(W-160)/3 + (W-160)/6;
-    c.font = f(23, false); c.fillStyle = '#64748b'; c.fillText(top.toUpperCase(), sx, SSY);
-    c.font = f(58, true); c.fillStyle = '#e2e8f0'; c.fillText(val, sx, SSY+76);
-  });
-  c.font = f(27, false); c.fillStyle = '#64748b';
-  c.fillText(`${fmtDate(first.date)}  →  ${fmtDate(last.date)}`, W/2, SSY+132);
-
+  // ── MY JOURNEY ──
+  if (opts.sections.includes('journey')) {
+    divLine(cy); cy += 10;
+    c.font = f(28,true); c.fillStyle = '#7c3aed';
+    c.letterSpacing = '3px'; c.fillText('MY JOURNEY', W/2, cy+56); c.letterSpacing = '0px';
+    cy += 116;
+    [
+      ['Weight Lost', `-${(first.weight-last.weight).toFixed(1)} kg`],
+      ['Body Fat',    `-${(first.bfPct-last.bfPct).toFixed(1)}%`],
+      ['Days',        String(daysBetween(first.date,last.date))],
+    ].forEach(([top,val], i) => {
+      const sx = 80 + i*(W-160)/3 + (W-160)/6;
+      c.font = f(23,false); c.fillStyle = '#64748b'; c.fillText(top.toUpperCase(), sx, cy);
+      c.font = f(58,true);  c.fillStyle = '#e2e8f0'; c.fillText(val, sx, cy+76);
+    });
+    c.font = f(27,false); c.fillStyle = '#64748b';
+    c.fillText(`${fmtDate(first.date)}  →  ${fmtDate(last.date)}`, W/2, cy+132);
+  }
 
   return cv.toDataURL('image/png');
 }
